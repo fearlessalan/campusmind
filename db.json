@@ -1,0 +1,177 @@
+{
+  "users": {
+    "fearlessalain@gmail.com": {
+      "passwordHash": "",
+      "data": {
+        "documents": [],
+        "performance": {
+          "progress": 0,
+          "retention": 0,
+          "exam_readiness": 0,
+          "scoreHistory": []
+        },
+        "learningPath": [],
+        "completedLessons": [],
+        "quizHistory": []
+      }
+    },
+    "uwezoalain85@gmail.com": {
+      "passwordHash": "",
+      "data": {
+        "documents": [
+          {
+            "id": "demo-doc-algo",
+            "name": "Algorithmique_et_Structures_de_Donnees.docx",
+            "contentType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "size": 98110,
+            "uploadDate": "2026-06-06T14:01:23.445Z",
+            "chunks": [
+              {
+                "id": "algo-chunk-1",
+                "source": "Algorithmique_et_Structures_de_Donnees.docx",
+                "page": "Page 1",
+                "chapter": "Chapitre 1 : Introduction à l'Algorithmique",
+                "content": "Un algorithme est une suite finie et non ambiguë d'instructions permettant de résoudre un problème ou d'obtenir un résultat. Les structures de contrôle fondamentales sont le séquençage, les conditions (si-alors-sinon) et les boucles (tant que, pour)."
+              },
+              {
+                "id": "algo-chunk-2",
+                "source": "Algorithmique_et_Structures_de_Donnees.docx",
+                "page": "Page 4",
+                "chapter": "Chapitre 2 : Complexité algorithmique",
+                "content": "La complexité temporelle mesure le nombre d'opérations élémentaires exécutées par un algorithme en fonction de la taille de ses données d'entrée. La complexité spatiale estime l'espace mémoire requis. L'efficacité s'exprime typiquement avec la notation Grand O."
+              }
+            ]
+          }
+        ],
+        "performance": {
+          "progress": 25,
+          "retention": 30,
+          "exam_readiness": 40,
+          "scoreHistory": [
+            40
+          ]
+        },
+        "learningPath": [
+          {
+            "id": "algo-mod-1",
+            "title": "Algorithmes & Logique de Controle",
+            "description": "Structures conditionnelles, boucles, pseudo-code et structures de controle.",
+            "estimatedTime": "30m",
+            "order": 1,
+            "weakTopicRelation": "Algorithmes",
+            "isCompleted": true
+          },
+          {
+            "id": "algo-mod-2",
+            "title": "Analyse de Complexite",
+            "description": "Evaluation de la complexite temporelle et spatiale, notation Big-O.",
+            "estimatedTime": "40m",
+            "order": 2,
+            "weakTopicRelation": "Complexite",
+            "isCompleted": false
+          }
+        ],
+        "completedLessons": [
+          "algo-mod-1"
+        ],
+        "quizHistory": [
+          {
+            "date": "2026-06-06",
+            "type": "Quiz Algorithmique",
+            "score": 75
+          }
+        ]
+      }
+    }
+  },
+  "documents": [
+    {
+      "id": "doc-1780753944173",
+      "name": "ADAPTATION SCOLAIRE L2 LMD SCIENCES EXACTES.pdf",
+      "contentType": "application/pdf",
+      "size": 1404333,
+      "uploadDate": "2026-06-06T13:52:24.173Z",
+      "chunks": [
+        {
+          "id": "chunk-ai-1780753944172-0",
+          "source": "ADAPTATION SCOLAIRE L2 LMD SCIENCES EXACTES.pdf",
+          "page": "Page 5",
+          "chapter": "00. INTRODUCTION",
+          "content": "L'objectif général de l'Unité d'Enseignement (UE) 'Adaptation Scolaire' est de permettre à l'étudiant d'enseigner et d'assurer une prise en charge socio-affective adéquate des élèves présentant des difficultés d'adaptation, d'apprentissage ou un handicap. Au terme de cette unité d'apprentissage, l'étudiant de L2 LMD devra être capable de définir l'adaptation et l'inadaptation scolaire, d'expliquer les différentes sortes de déficiences (intellectuelles, physiques, caractérielles), et de présenter les difficultés d'apprentissage et de comportement. Il doit également comprendre les transitions scolaires (primaire-secondaire), l'importance de la collaboration école-famille, et les mécanismes de gestion de la santé mentale et de l'autisme à l'adolescence."
+        },
+        {
+          "id": "chunk-ai-1780753944172-1",
+          "source": "ADAPTATION SCOLAIRE L2 LMD SCIENCES EXACTES.pdf",
+          "page": "Page 6",
+          "chapter": "CHAPITRE PREMIER : GENERALITES SUR L'ADAPTATION ET L'INADAPTATION SCOLAIRE",
+          "content": "L'adaptation scolaire désigne l'ensemble des services offerts aux jeunes en difficultés d'adaptation ou d'apprentissage qui présentent des besoins spéciaux. Elle s'inscrit dans le renouveau pédagogique et vise à aider l'élève handicapé ou en difficulté à réussir sur le plan de l'instruction, de la socialisation et de la qualification. À l'inverse, l'inadaptation scolaire est définie comme une situation de déséquilibre dans la vie scolaire, se traduisant souvent par un échec partiel ou total, des redoublements ou l'abandon. L'inadapté scolaire est un enfant ou un adolescent qui, par insuffisance d'aptitudes, troubles de la personnalité ou de la conduite, se trouve en conflit prolongé avec les exigences de son milieu scolaire."
+        },
+        {
+          "id": "chunk-ai-1780753944172-2",
+          "source": "ADAPTATION SCOLAIRE L2 LMD SCIENCES EXACTES.pdf",
+          "page": "Page 10",
+          "chapter": "CHAPITRE DEUXIEME: LES INADAPTES SCOLAIRES",
+          "content": "Dans la catégorie des inadaptés scolaires sans déficience mentale, on distingue trois groupes principaux : les inadaptés bien doués (intelligents et créatifs), les enfants moyennement doués et les enfants présentant des troubles de la personnalité. Contrairement aux idées reçues, une intelligence très supérieure (QI supérieur à 140) peut être à l'origine d'un désintéressement et d'un ennui scolaire car les programmes sont conçus pour l'élève moyen. De même, les enfants hautement créatifs manifestent une libre pensée et un libre agir qui s'écartent des normes de l'école traditionnelle, les faisant souvent passer pour indisciplinés ou dérangeurs aux yeux des enseignants."
+        },
+        {
+          "id": "chunk-ai-1780753944172-3",
+          "source": "ADAPTATION SCOLAIRE L2 LMD SCIENCES EXACTES.pdf",
+          "page": "Page 15",
+          "chapter": "CHAPITRE DEUXIEME: LES INADAPTES SCOLAIRES",
+          "content": "Les inadaptés avec déficience intellectuelle (ou arriérés mentaux) présentent une insuffisance des capacités intellectuelles, classée en trois degrés : déficience légère, moyenne et grave. Les déficients intellectuels éducables, communément appelés 'débiles', sont souvent exempts d'anomalies physiques visibles. Selon Binet et Simon, ils savent communiquer par écrit et par parole mais accusent un retard scolaire de 2 à 3 ans. Leur pensée s'apparente à celle d'enfants de 9 à 10 ans, avec une prédominance des fonctions d'acquisition sur les fonctions d'élaboration, et un QI oscillant entre 50 et 75 selon l'American Psychological Association (APA)."
+        },
+        {
+          "id": "chunk-ai-1780753944172-4",
+          "source": "ADAPTATION SCOLAIRE L2 LMD SCIENCES EXACTES.pdf",
+          "page": "Page 24",
+          "chapter": "CHAPITRE TROISIEME : LES INADAPTES CARACTERIELS",
+          "content": "Les troubles du caractère affectent la personnalité globale de l'enfant difficile. Le caractère se définit comme la marque personnelle d'un individu permettant de le distinguer d'un autre, représentant le squelette mental formé de dispositions congénitales. Il convient de le distinguer du tempérament, défini par Henri Pierron comme l'ensemble des particularités morphologiques et physiologiques immuables qui influencent le caractère, ce dernier restant quant à lui évolutif et changeant. La psychanalyse montre que la genèse de ces troubles réside souvent dans des frustrations précoces, des altérations du système nerveux ou des carences affectives profondes."
+        },
+        {
+          "id": "chunk-ai-1780753944172-5",
+          "source": "ADAPTATION SCOLAIRE L2 LMD SCIENCES EXACTES.pdf",
+          "page": "Page 29",
+          "chapter": "CHAPITRE IV : INTERVENTION AUPRES D'ELEVES AYANT DES DIFFICULTES DE COMPORTEMENT",
+          "content": "Il est crucial de distinguer les difficultés de comportement des troubles du comportement. Les difficultés de comportement sont des manifestations réactionnelles temporaires liées à un contexte particulier ou à des événements de vie (deuil, séparation). Une gestion de classe efficace et des modifications environnementales suffisent généralement à y remédier. En revanche, les troubles du comportement représentent un déficit persistant de la capacité d'adaptation avec de graves difficultés d'interaction sociale. Ils peuvent être extériorisés (comportements sur-réactifs comme l'intimidation et la violence) ou intériorisés (comportements sous-réactifs de retrait, tristesse et passivité)."
+        },
+        {
+          "id": "chunk-ai-1780753944172-6",
+          "source": "ADAPTATION SCOLAIRE L2 LMD SCIENCES EXACTES.pdf",
+          "page": "Page 32",
+          "chapter": "CHAPITRE IV : INTERVENTION AUPRES D'ELEVES AYANT DES DIFFICULTES DE COMPORTEMENT",
+          "content": "L'approche écosystémique, inspirée des travaux de Bronfenbrenner, permet d'appréhender globalement l'élève en analysant les cinq systèmes qui influencent son développement. L'ontosystème regroupe ses caractéristiques et habiletés individuelles. Le microsystème est son milieu de vie immédiat (famille, école). Le mésosystème englobe les interactions entre les microsystèmes (comme la relation parents-enseignants). L'exosystème concerne l'environnement externe sans interaction directe mais ayant une influence (conditions de travail des parents). Enfin, le macrosystème intègre l'ensemble des croyances, des valeurs et des idéologies partagées par la communauté."
+        },
+        {
+          "id": "chunk-ai-1780753944172-7",
+          "source": "ADAPTATION SCOLAIRE L2 LMD SCIENCES EXACTES.pdf",
+          "page": "Page 46",
+          "chapter": "CHAPITRE IV : INTERVENTION AUPRES D'ELEVES AYANT DES DIFFICULTES DE COMPORTEMENT",
+          "content": "L'application d'une démarche d'intervention graduée s'articule autour d'un plan d'intervention personnalisé en plusieurs étapes. L'Étape 1 consiste en une rencontre individuelle élève-enseignant visant à faire le point sur le comportement, clarifier les attentes et s'accorder sur des correctifs concrets à court terme (changement de place, signaux non verbaux). L'Étape 2 élargit la démarche à une rencontre enseignant-parents, fortement recommandée en présence de l'élève. Cette collaboration permet de recueillir des informations complémentaires, d'impliquer activement le jeune dans la résolution de ses difficultés et d'unifier les stratégies de soutien à l'école et à la maison."
+        },
+        {
+          "id": "chunk-ai-1780753944172-8",
+          "source": "ADAPTATION SCOLAIRE L2 LMD SCIENCES EXACTES.pdf",
+          "page": "Page 50",
+          "chapter": "CHAPITRE CINQUIEME: LA SANTE MENTALE ET LES JEUNES",
+          "content": "Selon l'OMS, la santé mentale n'est pas seulement l'absence de maladie ou d'infirmité, mais un état de complet bien-être physique, mental et social permettant à l'individu de se réaliser, de surmonter les tensions normales de la vie et de contribuer à sa communauté. On distingue la santé mentale du trouble mental, ce dernier impliquant l'existence d'un ensemble de symptômes ou de comportements cliniquement reconnaissables associés à une détresse et une perturbation des fonctions personnelles. À l'adolescence, la dépression est une pathologie fréquente touchant environ 30% des jeunes sous une forme d'humeur dépressive et 3 à 10% sous forme sévère."
+        },
+        {
+          "id": "chunk-ai-1780753944173-9",
+          "source": "ADAPTATION SCOLAIRE L2 LMD SCIENCES EXACTES.pdf",
+          "page": "Page 56",
+          "chapter": "CHAPITRE CINQUIEME: LA SANTE MENTALE ET LES JEUNES",
+          "content": "L'autisme, aujourd'hui classé parmi les Troubles du Spectre de l'Autisme (TSA), englobe les anciens Troubles Envahissants du Développement (TED). Il se caractérise historiquement par une triade d'altérations : difficultés dans les relations sociales, troubles de la communication verbale et non-verbale, et présence d'activités ou d'intérêts restreints et stéréotypés. Selon le DSM-5, ces caractéristiques sont présentes dès la petite enfance et durent toute la vie. Le niveau intellectuel des personnes autistes est très variable : il est déficitaire dans 45 à 50% des cas (double diagnostic avec QI < 70) mais peut également s'avérer supérieur à la normale."
+        }
+      ]
+    }
+  ],
+  "performance": {
+    "progress": 0,
+    "retention": 0,
+    "exam_readiness": 0,
+    "scoreHistory": []
+  },
+  "learningPath": [],
+  "completedLessons": [],
+  "quizHistory": []
+}

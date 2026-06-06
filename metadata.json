@@ -1,0 +1,6 @@
+{
+  "name": "CampusMind",
+  "description": "AI-powered academic operating system that transforms course materials into personalized learning journeys.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
