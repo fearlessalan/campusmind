@@ -24,7 +24,15 @@ import {
   LessonContent, 
   Question 
 } from "../types";
-import { apiFetch } from "../lib/api";
+import { apiFetch, parseApiResponse } from "../lib/api";
+import {
+  evaluateAndCurriculum,
+  generateDiagnosticQuiz,
+  generateLesson,
+  generateModuleQuiz,
+  generateReinforcement,
+} from "../lib/campusAi";
+import { useModal } from "../context/ModalContext";
 
 interface AdaptiveTrainingProps {
   documents: any[];
@@ -41,7 +49,8 @@ export default function AdaptiveTraining({
   onCurriculumUpdate,
   onLessonComplete
 }: AdaptiveTrainingProps) {
-  
+  const { showAlert } = useModal();
+
   // Phase toggles: "diagnostic" | "curriculum"
   const [phase, setPhase] = useState<"diagnostic" | "curriculum">("curriculum");
   
@@ -84,12 +93,11 @@ export default function AdaptiveTraining({
     setStudentAnswers({});
     setPhase("diagnostic");
     try {
-      const response = await apiFetch("/api/diagnostic-quiz");
-      if (!response.ok) throw new Error("Could not retrieve diagnostic material");
-      const data = await response.json();
+      if (documents.length === 0) throw new Error("Importez d'abord des documents.");
+      const data = await generateDiagnosticQuiz(documents);
       setDiagnosticQuiz(data);
     } catch (err) {
-      alert("Error starting academic assessment: " + (err as Error).message);
+      showAlert("Entraînement", (err as Error).message, "error");
       setPhase("curriculum");
     } finally {
       setLoadingQuiz(false);
@@ -104,17 +112,17 @@ export default function AdaptiveTraining({
     if (!diagnosticQuiz) return;
     setIsSubmittingDiagnostic(true);
     try {
-      const response = await apiFetch("/api/evaluate-and-curriculum", {
+      const aiResult = await evaluateAndCurriculum(studentAnswers, diagnosticQuiz);
+      const response = await apiFetch("/api/training/save-curriculum", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          answers: studentAnswers,
-          quizData: diagnosticQuiz
-        })
+        body: JSON.stringify(aiResult)
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Evaluation failed");
-      
+      const data = await parseApiResponse<{
+        evaluation: QuizEvaluation;
+        learningPath: LearningModule[];
+      }>(response);
+
       setDiagnosticResult(data.evaluation);
       onCurriculumUpdate(data.learningPath, data.evaluation);
       setPhase("curriculum");
@@ -123,7 +131,7 @@ export default function AdaptiveTraining({
         loadLesson(data.learningPath[0].id);
       }
     } catch (err: any) {
-      alert("Evaluation failed: " + err.message);
+      showAlert("Évaluation", err.message, "error");
     } finally {
       setIsSubmittingDiagnostic(false);
     }
@@ -139,9 +147,9 @@ export default function AdaptiveTraining({
     setLoadingLesson(true);
 
     try {
-      const response = await apiFetch(`/api/module/${modId}/lesson`);
-      if (!response.ok) throw new Error("Failed to compile module lesson notes");
-      const data = await response.json();
+      const mod = learningPath.find((m) => m.id === modId);
+      if (!mod) throw new Error("Module introuvable");
+      const data = await generateLesson(mod, documents);
       setLessonContent(data);
     } catch (err: any) {
       console.error(err);
@@ -176,9 +184,9 @@ export default function AdaptiveTraining({
     setPracticeScore(null);
 
     try {
-      const response = await apiFetch(`/api/module/${activeModuleId}/quiz`);
-      if (!response.ok) throw new Error("Failed quiz compiling");
-      const data = await response.json();
+      const mod = learningPath.find((m) => m.id === activeModuleId);
+      if (!mod) throw new Error("Module introuvable");
+      const data = await generateModuleQuiz(mod, documents);
       setPracticeQuiz(data.questions);
     } catch (err: any) {
       console.error(err);
@@ -206,7 +214,7 @@ export default function AdaptiveTraining({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          moduleTitle: targetModule?.title || "Module Practices",
+          moduleTitle: targetModule?.title || "Exercices du module",
           score: finalScore
         })
       });
@@ -221,8 +229,8 @@ export default function AdaptiveTraining({
     setReinforcementAnswer(null);
     setReinforcementSolved(false);
     try {
-      const response = await apiFetch("/api/reinforcement/scheduled");
-      const data = await response.json();
+      if (documents.length === 0) return;
+      const data = await generateReinforcement(documents);
       setReinforcementData(data);
     } catch (e) {
       console.error(e);
@@ -242,14 +250,19 @@ export default function AdaptiveTraining({
     <div className="space-y-8">
       
       {/* Visual Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between p-6 bg-white rounded-2xl border border-slate-105 shadow-3xs">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between p-6 bg-white rounded-2xl border border-outline-variant md-elevation-1">
         <div>
-          <h1 className="text-2xl font-sans font-bold text-slate-900 flex items-center gap-2">
-            <GraduationCap className="w-6 h-6 text-indigo-500 animate-pulse" /> Adaptive Learning OS
+          <h1 className="text-2xl font-bold text-on-surface flex items-center gap-2">
+            <GraduationCap className="w-6 h-6 text-primary animate-pulse" /> Entraînement
           </h1>
-          <p className="text-xs text-slate-500 max-w-lg">
-            A real-time agentic curriculum built around your concept strengths and weaknesses. Prioritise failures and practice actively.
+          <p className="text-sm text-on-surface-variant max-w-lg mt-1">
+            Parcours personnalisé à partir de vos documents : diagnostic, plan d'apprentissage, quiz adaptatifs et renforcement espacé.
           </p>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {["Assessment", "Curriculum", "Quiz", "Performance", "Reinforcement"].map((agent) => (
+              <span key={agent} className="md-chip text-[10px]">{agent}</span>
+            ))}
+          </div>
         </div>
 
         {hasDocs && (
@@ -257,7 +270,7 @@ export default function AdaptiveTraining({
             onClick={startDiagnostic}
             className="mt-4 md:mt-0 px-4 py-2.5 text-xs font-semibold text-white bg-indigo-650 hover:bg-indigo-700 rounded-xl hover:scale-102 cursor-pointer transition-all shadow-md select-none"
           >
-            Trigger New Diagnostic Assessment
+            Lancer une nouvelle évaluation diagnostique
           </button>
         )}
       </div>
@@ -268,15 +281,15 @@ export default function AdaptiveTraining({
           <div className="flex items-center gap-2 pb-4 border-b border-slate-50">
             <Timer className="w-5 h-5 text-indigo-500 animate-spin" />
             <div>
-              <h2 className="text-base font-sans font-semibold text-slate-900">Cognitive Assessment Agent is Evaluating...</h2>
-              <span className="text-[10px] font-mono text-slate-400 font-semibold uppercase">Mapping baseline capability matrices</span>
+              <h2 className="text-base font-sans font-semibold text-slate-900">L'agent d'évaluation cognitive analyse...</h2>
+              <span className="text-[10px] font-mono text-slate-400 font-semibold uppercase">Cartographie des capacités de référence</span>
             </div>
           </div>
 
           {loadingQuiz ? (
             <div className="py-12 flex flex-col items-center justify-center text-slate-500 space-y-2">
               <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-              <p className="text-xs font-mono">Formulating multi-format diagnostic quiz with active textbook pages...</p>
+              <p className="text-xs font-mono">Formulation d'un quiz diagnostique multi-format à partir des pages du manuel...</p>
             </div>
           ) : (diagnosticQuiz && Array.isArray(diagnosticQuiz.questions)) ? (
             <div className="space-y-6">
@@ -289,7 +302,7 @@ export default function AdaptiveTraining({
                   
                   {q.hint && (
                     <p className="text-[11px] text-slate-400 italic flex items-center gap-1">
-                      <Lightbulb className="w-3.5 h-3.5 text-indigo-400 shrink-0" /> Hint: {q.hint}
+                      <Lightbulb className="w-3.5 h-3.5 text-indigo-400 shrink-0" /> Indice : {q.hint}
                     </p>
                   )}
 
@@ -316,7 +329,7 @@ export default function AdaptiveTraining({
                     <div className="pt-1.5">
                       <input
                         type="text"
-                        placeholder="Type detailed educational breakdown explanation..."
+                        placeholder="Saisissez une explication détaillée..."
                         value={studentAnswers[q.id] || ""}
                         onChange={(e) => handleSelectOption(q.id, e.target.value)}
                         className="w-full px-4 py-3 border border-slate-200 bg-white rounded-xl focus:outline-hidden focus:border-indigo-400 text-xs text-slate-700"
@@ -332,13 +345,13 @@ export default function AdaptiveTraining({
                   disabled={isSubmittingDiagnostic || Object.keys(studentAnswers).length < 2}
                   className="px-5 py-3 rounded-lg text-xs text-white font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 animate-pulse shadow-sm cursor-pointer"
                 >
-                  {isSubmittingDiagnostic ? "Curriculum Agent compiling..." : "Analyze Performance & Compile Curriculum"}
+                  {isSubmittingDiagnostic ? "L'agent compile le parcours..." : "Analyser les performances et compiler le parcours"}
                 </button>
               </div>
             </div>
           ) : (
             <div className="py-6 text-center text-slate-400 text-xs">
-              Mnemonic assessment engine offline. Try starting again.
+              Moteur d'évaluation hors ligne. Veuillez réessayer.
             </div>
           )}
         </div>
@@ -352,19 +365,19 @@ export default function AdaptiveTraining({
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-3xs">
               <h2 className="text-sm font-sans font-semibold text-slate-900 mb-4 flex items-center gap-1.5">
-                <ListTodo className="w-4 h-4 text-indigo-500" /> Active Master Curriculum
+                <ListTodo className="w-4 h-4 text-indigo-500" /> Parcours principal actif
               </h2>
 
               {learningPath.length === 0 ? (
                 <div className="py-8 text-center text-xs text-slate-400 space-y-3">
-                  <p>You have not run an adaptive diagnostic assessment with the Curriculum Agent yet!</p>
-                  <p className="text-[11px] opacity-80">We can generate standard learning modules right away using preloaded textbooks when you run diagnostic testing above.</p>
+                  <p>Vous n'avez pas encore lancé d'évaluation diagnostique adaptative avec l'agent de parcours !</p>
+                  <p className="text-[11px] opacity-80">Nous pouvons générer des modules d'apprentissage standard dès maintenant à partir des manuels préchargés, en lançant le diagnostic ci-dessus.</p>
                   {hasDocs && (
                     <button
                       onClick={startDiagnostic}
                       className="px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg select-none cursor-pointer"
                     >
-                      Start diagnostic testing
+                      Démarrer le diagnostic
                     </button>
                   )}
                 </div>
@@ -394,7 +407,7 @@ export default function AdaptiveTraining({
                               </span>
                               {mod.weakTopicRelation && (
                                 <span className="px-1.5 py-0.5 bg-rose-50 text-rose-600 text-[8px] font-mono font-bold uppercase rounded-sm border border-rose-100/30">
-                                  Prioritised: {mod.weakTopicRelation}
+                                  Prioritaire : {mod.weakTopicRelation}
                                 </span>
                               )}
                             </div>
@@ -403,7 +416,7 @@ export default function AdaptiveTraining({
 
                           {isCompleted ? (
                             <span className="text-emerald-600 font-mono text-[10px] lowercase flex items-center gap-0.5 font-bold">
-                              <CheckCircle2 className="w-3.5 h-3.5" /> mastered
+                              <CheckCircle2 className="w-3.5 h-3.5" /> maîtrisé
                             </span>
                           ) : (
                             <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
@@ -419,29 +432,29 @@ export default function AdaptiveTraining({
 
             {/* SPACED REPETITION BLOCK: Agent 6 (Reinforcement Agent) */}
             {hasDocs && reinforcementData && reinforcementData.targetedQuickQuiz && (
-              <div className="bg-slate-900 border border-slate-800 text-white p-5 rounded-2xl shadow-xl relative overflow-hidden">
-                <div className="absolute right-0 top-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
+              <div className="bg-secondary-container/60 border border-outline-variant text-on-surface p-5 rounded-2xl md-elevation-2 relative overflow-hidden">
+                <div className="absolute right-0 top-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl pointer-events-none" />
                 
-                <div className="flex items-center gap-1.5 pb-3.5 border-b border-slate-850">
-                  <Activity className="w-4 h-4 text-indigo-400 animate-pulse" />
+                <div className="flex items-center gap-1.5 pb-3.5 border-b border-outline-variant">
+                  <Activity className="w-4 h-4 text-primary animate-pulse" />
                   <div>
-                    <h3 className="text-xs font-mono uppercase font-bold tracking-wider text-indigo-300">Spaced Repetition Active</h3>
-                    <span className="text-[9px] text-slate-400">Scheduled active memory audit concept</span>
+                    <h3 className="text-xs font-mono uppercase font-bold tracking-wider text-primary">Répétition espacée active</h3>
+                    <span className="text-[9px] text-on-surface-variant">Concept d'audit mémoriel programmé</span>
                   </div>
                 </div>
 
                 <div className="pt-4 space-y-3.5 text-xs">
                   <div>
                     <div className="flex justify-between text-[11px] mb-1">
-                      <span className="font-bold text-slate-300">Concept: {reinforcementData.conceptName}</span>
-                      <span className="text-slate-500 font-mono">{reinforcementData.originalSource}</span>
+                      <span className="font-bold text-on-surface">Concept : {reinforcementData.conceptName}</span>
+                      <span className="text-on-surface-variant font-mono">{reinforcementData.originalSource}</span>
                     </div>
-                    <p className="text-[11px] text-slate-400 leading-relaxed font-sans">{reinforcementData.spacedRepetitionExplanation}</p>
+                    <p className="text-[11px] text-on-surface-variant leading-relaxed font-sans">{reinforcementData.spacedRepetitionExplanation}</p>
                   </div>
 
-                  <div className="p-3.5 rounded-xl bg-slate-850 border border-slate-800 space-y-3">
-                    <span className="px-1.5 py-0.5 bg-indigo-500/10 text-indigo-300 text-[8px] font-mono font-bold uppercase border border-indigo-400/10 rounded-sm">Immediate recall check</span>
-                    <p className="font-semibold text-slate-205 text-[11px] leading-relaxed">{reinforcementData.targetedQuickQuiz.question}</p>
+                  <div className="p-3.5 rounded-xl bg-white border border-outline-variant space-y-3">
+                    <span className="px-1.5 py-0.5 bg-primary-container text-primary text-[8px] font-mono font-bold uppercase border border-primary/20 rounded-sm">Vérification de rappel immédiat</span>
+                    <p className="font-semibold text-on-surface text-[11px] leading-relaxed">{reinforcementData.targetedQuickQuiz.question}</p>
                     
                     <div className="space-y-2">
                       {reinforcementData.targetedQuickQuiz.options?.map((opt: string) => {
@@ -457,11 +470,11 @@ export default function AdaptiveTraining({
                             className={`w-full text-left px-3 py-2 text-[10px] font-medium rounded-lg border transition-all cursor-pointer flex justify-between items-center ${
                               reinforcementSolved
                                 ? isCorrectOpt
-                                  ? "bg-emerald-900/30 border-emerald-500/40 text-emerald-300"
+                                  ? "bg-success-container/50 border-success/30 text-success"
                                   : isSelected
-                                  ? "bg-red-900/30 border-red-500/40 text-red-300"
-                                  : "bg-slate-850 text-slate-500 border-slate-800"
-                                : "hover:bg-slate-800 bg-slate-900 text-slate-300 border-slate-800"
+                                  ? "bg-error-container/50 border-error/30 text-error"
+                                  : "bg-surface-container-low text-on-surface-variant border-outline-variant"
+                                : "hover:bg-surface-container bg-white text-on-surface border-outline-variant"
                             }`}
                           >
                             <span>{opt}</span>
@@ -473,7 +486,7 @@ export default function AdaptiveTraining({
 
                     {reinforcementSolved && (
                       <div className="pt-2 text-[10px] text-slate-400 border-t border-slate-800">
-                        <span className="font-semibold text-white block pb-1">Correction Logic:</span>
+                        <span className="font-semibold text-white block pb-1">Logique de correction :</span>
                         <span>{reinforcementData.targetedQuickQuiz.explanation}</span>
                       </div>
                     )}
@@ -489,9 +502,9 @@ export default function AdaptiveTraining({
             {!activeModuleId ? (
               <div className="bg-white py-16 rounded-2xl border border-slate-100 shadow-xs flex flex-col items-center justify-center text-slate-400 text-center px-6">
                 <PlayCircle className="w-12 h-12 stroke-1 text-slate-300 animate-bounce mb-3" />
-                <h3 className="font-sans font-medium text-slate-700 text-sm">Review Textbook Lessons</h3>
+                <h3 className="font-sans font-medium text-slate-700 text-sm">Consulter les leçons du manuel</h3>
                 <p className="text-xs text-slate-400 max-w-xs mt-1">
-                  Select a Curriculum Module on the left side to compile its active AI teaching lesson guide and adaptive practice tests.
+                  Sélectionnez un module du parcours à gauche pour compiler son guide pédagogique IA et ses exercices adaptatifs.
                 </p>
               </div>
             ) : (
@@ -501,9 +514,9 @@ export default function AdaptiveTraining({
                 <div className="pb-5 border-b border-slate-50 space-y-4">
                   <div className="flex justify-between items-start flex-wrap gap-2">
                     <div>
-                      <span className="text-[10px] font-mono text-indigo-600 font-bold uppercase tracking-wider block">Currently Reading</span>
+                      <span className="text-[10px] font-mono text-indigo-600 font-bold uppercase tracking-wider block">Lecture en cours</span>
                       <h2 className="text-lg font-sans font-bold text-slate-900 leading-tight">
-                        {loadingLesson ? "Lesson Agent compiling details..." : lessonContent?.title}
+                        {loadingLesson ? "L'agent compile la leçon..." : lessonContent?.title}
                       </h2>
                     </div>
 
@@ -513,7 +526,7 @@ export default function AdaptiveTraining({
                         disabled={loadingLesson || loadingPractice}
                         className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg select-none cursor-pointer text-slate-800 transition-all flex items-center gap-1 shrink-0"
                       >
-                        <FileQuestion className="w-3.5 h-3.5" /> Practice Challenge
+                        <FileQuestion className="w-3.5 h-3.5" /> Défi pratique
                       </button>
 
                       <button
@@ -521,7 +534,7 @@ export default function AdaptiveTraining({
                         disabled={loadingLesson || isFinishingLesson}
                         className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-semibold rounded-lg select-none cursor-pointer transition-all flex items-center gap-1 shrink-0"
                       >
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Complete Lesson
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Terminer la leçon
                       </button>
                     </div>
                   </div>
@@ -529,7 +542,7 @@ export default function AdaptiveTraining({
                   {loadingLesson ? (
                     <div className="py-8 flex flex-col items-center justify-center space-y-2 text-slate-400 text-xs font-mono">
                       <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
-                      <span>Synthesizing lessons, key glossary lists, real scenarios and pneumonics...</span>
+                      <span>Synthèse des leçons, glossaires, scénarios réels et mnémoniques...</span>
                     </div>
                   ) : lessonContent ? (
                     <div className="space-y-5 text-slate-700 text-xs leading-relaxed">
@@ -538,7 +551,7 @@ export default function AdaptiveTraining({
 
                       {/* Active Concept Glossary Flashcards */}
                       <div className="space-y-3">
-                        <span className="font-semibold text-slate-900 block flex items-center gap-1">Glossary Concept Flashcards:</span>
+                        <span className="font-semibold text-slate-900 block flex items-center gap-1">Fiches glossaire conceptuelles :</span>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                           {lessonContent.keyConcepts.map((item, keyIdx) => (
                             <div key={keyIdx} className="p-3 bg-linear-to-b from-indigo-50/10 to-indigo-50/20 border border-indigo-100/40 rounded-xl space-y-1">
@@ -552,7 +565,7 @@ export default function AdaptiveTraining({
                       {/* Sciene Applied examples */}
                       {lessonContent.examples && (
                         <div className="p-4 bg-emerald-50/30 border border-emerald-150/40 rounded-xl space-y-2">
-                          <span className="font-semibold text-emerald-800 block text-xs">Applied Scenario Cases:</span>
+                          <span className="font-semibold text-emerald-800 block text-xs">Cas pratiques appliqués :</span>
                           <ul className="list-disc pl-4 space-y-1.5 text-slate-650">
                             {lessonContent.examples.map((ex, eIdx) => (
                               <li key={eIdx}>{ex}</li>
@@ -565,7 +578,7 @@ export default function AdaptiveTraining({
                       {lessonContent.memoryTips && (
                         <div className="p-4 bg-amber-50/30 border border-amber-150/40 rounded-xl space-y-2">
                           <span className="font-semibold text-amber-800 block text-xs flex items-center gap-1.5">
-                            <Smile className="w-4 h-4 text-amber-500 shrink-0" /> Eccentric Mneumonic Tricks (AI Lesson Agent):
+                            <Smile className="w-4 h-4 text-amber-500 shrink-0" /> Astuces mnémoniques (Agent de leçon IA) :
                           </span>
                           <ul className="list-disc pl-4 space-y-1.5 text-slate-650 italic">
                             {lessonContent.memoryTips.map((tip, tIdx) => (
@@ -578,7 +591,7 @@ export default function AdaptiveTraining({
                     </div>
                   ) : (
                     <div className="py-6 text-center text-slate-400">
-                      Module coursework parameters unloaded. Click any module lessons.
+                      Contenu du module non chargé. Cliquez sur un module pour afficher la leçon.
                     </div>
                   )}
                 </div>
@@ -589,16 +602,16 @@ export default function AdaptiveTraining({
                     <div className="flex justify-between items-center pb-3 border-b border-slate-50">
                       <div>
                         <h3 className="font-sans font-semibold text-slate-900 text-sm flex items-center gap-1">
-                          <FileQuestion className="w-4.5 h-4.5 text-indigo-500" /> Topic Adaptive Quiz
+                          <FileQuestion className="w-4.5 h-4.5 text-indigo-500" /> Quiz adaptatif par thème
                         </h3>
-                        <p className="text-[10px] text-slate-400">Interactive check compiled from materials</p>
+                        <p className="text-[10px] text-slate-400">Vérification interactive compilée à partir des supports</p>
                       </div>
                       
                       {checkedPractice && practiceScore !== null && (
                         <span className={`px-2.5 py-1 rounded-md text-[11px] font-mono font-bold ${
                           practiceScore >= 75 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
                         }`}>
-                          Score: {practiceScore}%
+                          Score : {practiceScore}%
                         </span>
                       )}
                     </div>
@@ -645,7 +658,7 @@ export default function AdaptiveTraining({
                             <input
                               type="text"
                               disabled={checkedPractice}
-                              placeholder="Type scientific description explanation..."
+                              placeholder="Saisissez une description scientifique..."
                               value={practiceAnswers[pq.id] || ""}
                               onChange={(e) => setPracticeAnswers(prev => ({ ...prev, [pq.id]: e.target.value }))}
                               className="w-full px-3 py-2 border border-slate-200 bg-white focus:outline-hidden text-xs rounded-lg"
@@ -654,7 +667,7 @@ export default function AdaptiveTraining({
 
                           {checkedPractice && (
                             <div className="pt-2 border-t border-slate-150/40 text-[10px] text-slate-400">
-                              <span className="font-semibold text-slate-700 block pb-0.5">Correct Answer: {pq.correctAnswer}</span>
+                              <span className="font-semibold text-slate-700 block pb-0.5">Réponse correcte : {pq.correctAnswer}</span>
                               <span className="block">{pq.explanation}</span>
                             </div>
                           )}
@@ -668,14 +681,14 @@ export default function AdaptiveTraining({
                           onClick={submitPracticeQuiz}
                           className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm cursor-pointer select-none transition-all"
                         >
-                          Submit Answers & Evaluate
+                          Soumettre les réponses et évaluer
                         </button>
                       ) : (
                         <button
                           onClick={loadPracticeQuiz}
                           className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-all cursor-pointer flex items-center gap-1"
                         >
-                          <RotateCcw className="w-3.5 h-3.5" /> Retry Practice Quiz
+                          <RotateCcw className="w-3.5 h-3.5" /> Recommencer le quiz
                         </button>
                       )}
                     </div>
@@ -684,7 +697,7 @@ export default function AdaptiveTraining({
                   loadingPractice && (
                     <div className="pt-6 py-12 flex flex-col items-center justify-center space-y-2 font-mono text-xs text-slate-400">
                       <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
-                      <span>Quiz Agent collecting question parameters...</span>
+                      <span>L'agent collecte les paramètres des questions...</span>
                     </div>
                   )
                 )}

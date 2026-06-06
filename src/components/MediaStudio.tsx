@@ -16,19 +16,41 @@ import {
   Square
 } from "lucide-react";
 import { PodcastScript, AudiobookChapter } from "../types";
-import { apiFetch } from "../lib/api";
+import { generateAudiobookStructure, generatePodcastScript } from "../lib/campusAi";
+import { useModal } from "../context/ModalContext";
 
 interface MediaStudioProps {
   documents: any[];
+  initialMode?: "podcast" | "audiobook";
+  lockedMode?: boolean;
+  initialPodcastScript?: PodcastScript | null;
+  initialAudiobookChapters?: AudiobookChapter[];
 }
 
-export default function MediaStudio({ documents }: MediaStudioProps) {
-  const [activeMode, setActiveMode] = useState<"podcast" | "audiobook">("podcast");
+const speakerLabel = (speaker: string) => {
+  if (speaker === "Professor") return "Professeur";
+  if (speaker === "Student") return "Étudiant";
+  return speaker;
+};
+
+export default function MediaStudio({
+  documents,
+  initialMode = "podcast",
+  lockedMode = false,
+  initialPodcastScript = null,
+  initialAudiobookChapters,
+}: MediaStudioProps) {
+  const { showAlert } = useModal();
+  const [activeMode, setActiveMode] = useState<"podcast" | "audiobook">(initialMode);
+
+  useEffect(() => {
+    setActiveMode(initialMode);
+  }, [initialMode]);
 
   // -----------------------------------------------------------
   // Podcast States
   // -----------------------------------------------------------
-  const [podcastScript, setPodcastScript] = useState<PodcastScript | null>(null);
+  const [podcastScript, setPodcastScript] = useState<PodcastScript | null>(initialPodcastScript);
   const [loadingPodcast, setLoadingPodcast] = useState(false);
   
   // Audio playback variables
@@ -38,7 +60,15 @@ export default function MediaStudio({ documents }: MediaStudioProps) {
   // -----------------------------------------------------------
   // Audiobook States
   // -----------------------------------------------------------
-  const [audiobookChapters, setAudiobookChapters] = useState<AudiobookChapter[]>([]);
+  const [audiobookChapters, setAudiobookChapters] = useState<AudiobookChapter[]>(initialAudiobookChapters ?? []);
+
+  useEffect(() => {
+    if (initialPodcastScript) setPodcastScript(initialPodcastScript);
+  }, [initialPodcastScript]);
+
+  useEffect(() => {
+    if (initialAudiobookChapters?.length) setAudiobookChapters(initialAudiobookChapters);
+  }, [initialAudiobookChapters]);
   const [loadingAudiobook, setLoadingAudiobook] = useState(false);
   const [activeChapterIdx, setActiveChapterIdx] = useState<number>(0);
   
@@ -64,12 +94,11 @@ export default function MediaStudio({ documents }: MediaStudioProps) {
     window.speechSynthesis?.cancel();
 
     try {
-      const response = await apiFetch("/api/podcast/script");
-      if (!response.ok) throw new Error("Podcast script generation failed");
-      const data = await response.json();
+      if (documents.length === 0) throw new Error("Importez des documents pour générer un podcast.");
+      const data = await generatePodcastScript(documents);
       setPodcastScript(data);
     } catch (err: any) {
-      alert("Failed compiling podcast files: " + err.message);
+      showAlert("Audio Summary", err.message, "error");
     } finally {
       setLoadingPodcast(false);
     }
@@ -91,7 +120,7 @@ export default function MediaStudio({ documents }: MediaStudioProps) {
       }
 
       if (!window.speechSynthesis) {
-        alert("Your browser does not support Speech Synthesis audio formats.");
+        showAlert("Synthèse vocale", "Votre navigateur ne prend pas en charge la synthèse vocale.", "warning");
         setIsPlayingPodcast(false);
         return;
       }
@@ -162,12 +191,11 @@ export default function MediaStudio({ documents }: MediaStudioProps) {
     window.speechSynthesis?.cancel();
 
     try {
-      const response = await apiFetch("/api/audiobook/structure");
-      if (!response.ok) throw new Error("Audiobook narrative outline compile failed");
-      const data = await response.json();
+      if (documents.length === 0) throw new Error("Importez des documents pour générer un audiobook.");
+      const data = await generateAudiobookStructure(documents);
       setAudiobookChapters(data.chapters);
     } catch (err: any) {
-      alert("Failed compiling audiobook: " + err.message);
+      showAlert("Audiobook", err.message, "error");
     } finally {
       setLoadingAudiobook(false);
     }
@@ -197,7 +225,7 @@ export default function MediaStudio({ documents }: MediaStudioProps) {
       setIsPlayingAudiobook(false);
     };
 
-    window.speechSynthesis?.speak(utterance);
+    window.speechSynthesis.speak(utterance);
   };
 
   const pauseAudiobook = () => {
@@ -211,38 +239,50 @@ export default function MediaStudio({ documents }: MediaStudioProps) {
     <div className="space-y-8 animate-fadeIn">
       
       {/* Visual Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-6 bg-white rounded-2xl border border-slate-100 shadow-3xs gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-6 bg-white rounded-2xl border border-outline-variant md-elevation-1 gap-4">
         <div>
-          <h1 className="text-2xl font-sans font-bold text-slate-900 flex items-center gap-2">
-            <Radio className="w-6 h-6 text-indigo-500 animate-pulse" /> Interactive Media Studio
+          <h1 className="text-2xl font-bold text-on-surface flex items-center gap-2">
+            {activeMode === "podcast" ? (
+              <><Radio className="w-6 h-6 text-primary animate-pulse" /> Audio Summary</>
+            ) : (
+              <><BookOpen className="w-6 h-6 text-primary" /> Audiobook</>
+            )}
           </h1>
-          <p className="text-xs text-slate-500 max-w-lg">
-            Turn dense course pdf textbooks into educational podcasts and narrate verbatim audiobooks natively in your browser.
+          <p className="text-sm text-on-surface-variant max-w-lg mt-1">
+            {activeMode === "podcast"
+              ? "Transformez vos notes en discussion podcast : extraction de contenu, script à deux voix, engagement pédagogique et synthèse vocale."
+              : "Conversion fidèle de vos sources en livre audio : OCR, détection de structure, narration verbatim et voix."}
           </p>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {(activeMode === "podcast"
+              ? ["Extraction", "Script", "Engagement", "TTS"]
+              : ["OCR", "Structure", "Narration", "Voix"]
+            ).map((agent) => (
+              <span key={agent} className="md-chip text-[10px]">{agent}</span>
+            ))}
+          </div>
         </div>
 
-        <div className="flex bg-slate-100 p-1.5 rounded-xl border border-slate-200 self-start sm:self-center">
-          <button
-            onClick={() => { setActiveMode("podcast"); window.speechSynthesis?.cancel(); setIsPlayingAudiobook(false); setIsPlayingPodcast(false); }}
-            className={`px-4 py-2 text-xs font-semibold rounded-lg select-none transition-all cursor-pointer ${
-              activeMode === "podcast"
-                ? "bg-slate-900 text-white shadow-xs"
-                : "text-slate-550 hover:text-slate-900"
-            }`}
-          >
-            Podcast Studio (Debate)
-          </button>
-          <button
-            onClick={() => { setActiveMode("audiobook"); window.speechSynthesis?.cancel(); setIsPlayingPodcast(false); setIsPlayingAudiobook(false); }}
-            className={`px-4 py-2 text-xs font-semibold rounded-lg select-none transition-all cursor-pointer ${
-              activeMode === "audiobook"
-                ? "bg-slate-900 text-white shadow-xs"
-                : "text-slate-550 hover:text-slate-900"
-            }`}
-          >
-            Audiobook Reader (Narration)
-          </button>
-        </div>
+        {!lockedMode && (
+          <div className="flex bg-surface-container-high p-1.5 rounded-xl border border-outline-variant self-start sm:self-center">
+            <button
+              onClick={() => { setActiveMode("podcast"); window.speechSynthesis?.cancel(); setIsPlayingAudiobook(false); setIsPlayingPodcast(false); }}
+              className={`px-4 py-2 text-xs font-semibold rounded-lg select-none transition-all cursor-pointer ${
+                activeMode === "podcast" ? "bg-primary text-on-primary shadow-xs" : "text-on-surface-variant hover:text-on-surface"
+              }`}
+            >
+              Audio Summary
+            </button>
+            <button
+              onClick={() => { setActiveMode("audiobook"); window.speechSynthesis?.cancel(); setIsPlayingPodcast(false); setIsPlayingAudiobook(false); }}
+              className={`px-4 py-2 text-xs font-semibold rounded-lg select-none transition-all cursor-pointer ${
+                activeMode === "audiobook" ? "bg-primary text-on-primary shadow-xs" : "text-on-surface-variant hover:text-on-surface"
+              }`}
+            >
+              Audiobook
+            </button>
+          </div>
+        )}
       </div>
 
       {/* CASE 1: PODCAST DEBATE SCREEN */}
@@ -253,16 +293,16 @@ export default function MediaStudio({ documents }: MediaStudioProps) {
           <div className="lg:col-span-4 bg-white p-5 rounded-2xl border border-slate-100 shadow-xs flex flex-col justify-between min-h-[300px]">
             <div>
               <h2 className="text-sm font-sans font-bold text-slate-900 pb-3 border-b border-slate-50 mb-4 flex items-center gap-1.5">
-                <Headphones className="w-4.5 h-4.5 text-indigo-500" /> Podcast Controller
+                <Headphones className="w-4.5 h-4.5 text-indigo-500" /> Contrôleur Podcast
               </h2>
               <p className="text-xs text-slate-500 leading-relaxed font-sans mb-5">
-                Generate an academic dialogue summarizing Course elements. Dual synthesized speakers exchange reasoning on topics.
+                Générez un dialogue académique résumant les éléments du cours. Deux voix synthétisées échangent sur les sujets abordés.
               </p>
 
               {podcastScript && isPlayingPodcast && (
                 <div className="space-y-2 py-4">
                   <span className="text-[10px] uppercase font-mono tracking-wider font-bold text-indigo-600 block animate-pulse">
-                    Synthesizing Live Speakers Broadcast...
+                    Diffusion en direct des voix synthétisées...
                   </span>
                   
                   {/* CSS waveform animation in pure Tailwind */}
@@ -286,11 +326,11 @@ export default function MediaStudio({ documents }: MediaStudioProps) {
                 >
                   {loadingPodcast ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" /> Concocting scripts...
+                      <Loader2 className="w-4 h-4 animate-spin" /> Élaboration des scripts...
                     </>
                   ) : (
                     <>
-                      Compile Dynamic Podcast <Sparkles className="w-4 h-4 animate-pulse" />
+                      Compiler le podcast dynamique <Sparkles className="w-4 h-4 animate-pulse" />
                     </>
                   )}
                 </button>
@@ -301,7 +341,7 @@ export default function MediaStudio({ documents }: MediaStudioProps) {
                       onClick={() => playPodcastSpeakLoop(activePodcastIdx || 0)}
                       className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl shadow-sm transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      <Play className="w-4 h-4 fill-white" /> Launch Playback Broadcast
+                      <Play className="w-4 h-4 fill-white" /> Lancer la lecture
                     </button>
                   ) : (
                     <div className="flex gap-2">
@@ -315,7 +355,7 @@ export default function MediaStudio({ documents }: MediaStudioProps) {
                         onClick={stopPodcast}
                         className="flex-1 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-xs rounded-xl shadow-xs transition-all text-center flex items-center justify-center gap-1 shrink-0 cursor-pointer"
                       >
-                        <Square className="w-4 h-4 fill-slate-700" /> Stop
+                        <Square className="w-4 h-4 fill-slate-700" /> Arrêter
                       </button>
                     </div>
                   )}
@@ -324,14 +364,14 @@ export default function MediaStudio({ documents }: MediaStudioProps) {
                     onClick={compilePodcast}
                     className="w-full py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl text-center cursor-pointer"
                   >
-                    Regenerate Podcast Script
+                    Régénérer le script podcast
                   </button>
                 </div>
               )}
 
               {!hasDocs && (
                 <p className="text-[10px] text-red-500 leading-relaxed text-center">
-                  *Knowledge documentation required. Load or upload study materials first.
+                  *Documentation requise. Chargez ou importez des supports d'étude au préalable.
                 </p>
               )}
             </div>
@@ -342,19 +382,19 @@ export default function MediaStudio({ documents }: MediaStudioProps) {
             {!podcastScript ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-400 py-16 text-center">
                 <Radio className="w-12 h-12 stroke-1 text-slate-300 animate-pulse mb-3" />
-                <h3 className="text-slate-705 text-sm font-medium font-sans">Podcast Script Display</h3>
+                <h3 className="text-slate-705 text-sm font-medium font-sans">Affichage du script podcast</h3>
                 <p className="text-xs text-slate-400 max-w-xs mt-1">
-                  Assemble your study textbook elements here to inspect dialogue interactions.
+                  Assemblez ici les éléments de votre manuel pour inspecter les interactions du dialogue.
                 </p>
               </div>
             ) : (
               <div className="space-y-4">
                 <div className="pb-3 border-b border-slate-200 flex justify-between items-center bg-white px-4 py-3 rounded-xl shadow-3xs">
                   <div>
-                    <span className="text-[9px] font-mono text-slate-400 tracking-wider font-semibold uppercase block">Dialogue Session Topic</span>
+                    <span className="text-[9px] font-mono text-slate-400 tracking-wider font-semibold uppercase block">Sujet de la session de dialogue</span>
                     <span className="text-xs font-bold text-slate-800">{podcastScript.title}</span>
                   </div>
-                  <span className="text-[10px] font-mono font-bold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-sm">Professor + Student</span>
+                  <span className="text-[10px] font-mono font-bold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-sm">Professeur + Étudiant</span>
                 </div>
 
                 <div className="space-y-3.5 pt-2">
@@ -380,7 +420,7 @@ export default function MediaStudio({ documents }: MediaStudioProps) {
                           <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-sm ${
                             isProf ? "bg-amber-100/30 text-amber-700" : "bg-indigo-100/30 text-indigo-700"
                           }`}>
-                            {seg.speaker}
+                            {speakerLabel(seg.speaker)}
                           </span>
                           <p className={`pt-1 text-slate-700 ${isActive ? "text-slate-900 font-medium" : ""}`}>
                             {seg.text}
@@ -405,19 +445,19 @@ export default function MediaStudio({ documents }: MediaStudioProps) {
           <div className="lg:col-span-5 bg-white p-5 rounded-2xl border border-slate-100 shadow-xs flex flex-col justify-between min-h-[300px]">
             <div>
               <h2 className="text-sm font-sans font-bold text-slate-900 pb-3 border-b border-slate-50 mb-4 flex items-center gap-1.5">
-                <BookOpen className="w-4.5 h-4.5 text-indigo-500" /> Compiled Audiobook Chapters
+                <BookOpen className="w-4.5 h-4.5 text-indigo-500" /> Chapitres de l'audiobook compilé
               </h2>
 
               {audiobookChapters.length === 0 ? (
                 <div className="py-12 text-center text-xs text-slate-400 space-y-4">
-                  <p>Verbatim Audiobook compilation ledger currently empty.</p>
+                  <p>Le registre de compilation de l'audiobook est actuellement vide.</p>
                   
                   <button
                     disabled={loadingAudiobook || !hasDocs}
                     onClick={compileAudiobook}
                     className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50 select-none cursor-pointer"
                   >
-                    {loadingAudiobook ? "Compiling narrations..." : "Assemble Audiobook"}
+                    {loadingAudiobook ? "Compilation des narrations..." : "Assembler l'audiobook"}
                   </button>
                 </div>
               ) : (
@@ -450,14 +490,14 @@ export default function MediaStudio({ documents }: MediaStudioProps) {
                     onClick={playAudiobookSection}
                     className="w-full py-3 bg-indigo-650 bg-indigo-600 text-white font-semibold text-xs rounded-xl shadow-xs transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <Play className="w-3.5 h-3.5 fill-white" /> Play Active Chapter Narration
+                    <Play className="w-3.5 h-3.5 fill-white" /> Lire le chapitre actif
                   </button>
                 ) : (
                   <button
                     onClick={pauseAudiobook}
                     className="w-full py-3 bg-amber-500 text-white font-semibold text-xs rounded-xl shadow-xs transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
                   >
-                    <Pause className="w-3.5 h-3.5 fill-white" /> Pause Active Narration
+                    <Pause className="w-3.5 h-3.5 fill-white" /> Mettre en pause la narration
                   </button>
                 )}
 
@@ -465,7 +505,7 @@ export default function MediaStudio({ documents }: MediaStudioProps) {
                   onClick={compileAudiobook}
                   className="w-full py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl text-center cursor-pointer"
                 >
-                  Regenerate Audiobook Chapters
+                  Régénérer les chapitres de l'audiobook
                 </button>
               </div>
             )}
@@ -476,26 +516,26 @@ export default function MediaStudio({ documents }: MediaStudioProps) {
             {audiobookChapters.length === 0 ? (
               <div className="py-16 text-center text-slate-405 text-slate-400 flex flex-col items-center justify-center h-full">
                 <FileText className="w-12 h-12 stroke-1 opacity-40 mb-3 animate-pulse" />
-                <h3 className="text-slate-705 text-sm font-medium font-sans">Chapter Reader Console</h3>
+                <h3 className="text-slate-705 text-sm font-medium font-sans">Console de lecture des chapitres</h3>
                 <p className="text-xs text-indigo-400/80 mt-1 max-w-sm">
-                  Textbook transcripts are mapped in chronological chapter sequence with no summarization, offering pure verbatim voice readings.
+                  Les transcriptions du manuel sont organisées en séquence chronologique de chapitres, sans résumé, pour une lecture vocale intégrale.
                 </p>
               </div>
             ) : (
               <div className="space-y-4">
                 <div className="flex justify-between items-center pb-3 border-b border-slate-50 bg-slate-50 px-4 py-2.5 rounded-lg border">
                   <div>
-                    <span className="text-[9px] font-mono text-slate-450 uppercase tracking-wider block">Verbatim Audiobook Section</span>
+                    <span className="text-[9px] font-mono text-slate-450 uppercase tracking-wider block">Section audiobook intégrale</span>
                     <span className="text-xs font-bold text-slate-800">{audiobookChapters[activeChapterIdx].title}</span>
                   </div>
                   
                   {/* Download button */}
                   <div className="flex items-center gap-1.5">
                     <button
-                      onClick={() => alert("MP3 compile complete! Download initialized.")}
+                      onClick={() => showAlert("Téléchargement", "Compilation MP3 terminée ! Téléchargement lancé.", "success")}
                       className="p-1 px-2 text-[10px] bg-white border hover:bg-slate-50 rounded text-slate-650 transition-all font-semibold flex items-center gap-1 cursor-pointer select-none"
                     >
-                      <Download className="w-3 h-3 text-slate-500" /> Save MP3
+                      <Download className="w-3 h-3 text-slate-500" /> Enregistrer MP3
                     </button>
                   </div>
                 </div>
@@ -507,8 +547,8 @@ export default function MediaStudio({ documents }: MediaStudioProps) {
                     {audiobookChapters[activeChapterIdx].text}
                   </p>
 
-                  <div className="p-3 bg-linear-to-b from-slate-900 to-indigo-950 text-slate-100 rounded-xl space-y-1.5 shadow-sm">
-                    <span className="text-[10px] font-mono text-indigo-400 font-bold uppercase tracking-wider block">Phonetic Transcription logs</span>
+                  <div className="p-3 bg-primary-container/40 border border-primary/15 text-on-surface rounded-xl space-y-1.5">
+                    <span className="text-[10px] font-mono text-indigo-400 font-bold uppercase tracking-wider block">Journal de transcription phonétique</span>
                     <p className="text-[11px] text-slate-350 italic font-mono leading-relaxed">
                       {audiobookChapters[activeChapterIdx].transcript}
                     </p>
