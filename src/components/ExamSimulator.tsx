@@ -24,14 +24,15 @@ import { useModal } from "../context/ModalContext";
 
 interface ExamSimulatorProps {
   documents: any[];
-  onExamSaved: (db: any) => void;
+  onExamSaved: (db: Record<string, unknown>) => void;
+  onAssetSaved?: (input: { type: "exam"; title: string; content: string; score: number; sourceCount?: number }) => Promise<void>;
 }
 
 type DifficultyLevel = "Facile" | "Moyen" | "Difficile";
 
 const DIFFICULTY_OPTIONS: DifficultyLevel[] = ["Facile", "Moyen", "Difficile"];
 
-export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorProps) {
+export default function ExamSimulator({ documents, onExamSaved, onAssetSaved }: ExamSimulatorProps) {
   const { showAlert } = useModal();
 
   // States: "setup" | "active" | "results"
@@ -114,7 +115,16 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
       const data = await parseApiResponse<{ dbState: Record<string, unknown> }>(response);
 
       setExamResults(grading);
-      if (data.dbState) onExamSaved(data.dbState);
+      if (data.dbState) {
+        onExamSaved(data.dbState);
+        await onAssetSaved?.({
+          type: "exam",
+          title: activeExam.title,
+          content: `Score : ${grading.score}% — ${grading.totalQuestions} questions`,
+          score: grading.score,
+          sourceCount: documents.length,
+        });
+      }
     } catch (err: any) {
       showAlert("Correction", err.message, "error");
       setExamState("active");

@@ -42,6 +42,8 @@ interface AdaptiveTrainingProps {
   completedLessons: string[];
   onCurriculumUpdate: (path: LearningModule[], evaluation: any) => void;
   onLessonComplete: (moduleId: string) => void;
+  onScoreRecorded?: (db: Record<string, unknown>) => void;
+  onAssetSaved?: (input: { type: "quiz"; title: string; content: string; score: number; sourceCount?: number }) => Promise<void>;
 }
 
 export default function AdaptiveTraining({
@@ -49,7 +51,9 @@ export default function AdaptiveTraining({
   learningPath,
   completedLessons,
   onCurriculumUpdate,
-  onLessonComplete
+  onLessonComplete,
+  onScoreRecorded,
+  onAssetSaved,
 }: AdaptiveTrainingProps) {
   const { showAlert } = useModal();
 
@@ -123,10 +127,19 @@ export default function AdaptiveTraining({
       const data = await parseApiResponse<{
         evaluation: QuizEvaluation;
         learningPath: LearningModule[];
+        dbState?: Record<string, unknown>;
       }>(response);
 
       setDiagnosticResult(data.evaluation);
       onCurriculumUpdate(data.learningPath, data.evaluation);
+      if (data.dbState) onScoreRecorded?.(data.dbState);
+      await onAssetSaved?.({
+        type: "quiz",
+        title: "Diagnostic initial",
+        content: `Score de maîtrise : ${data.evaluation.mastery_score}%`,
+        score: data.evaluation.mastery_score,
+        sourceCount: documents.length,
+      });
       setPhase("curriculum");
       // Load first module lesson automatically
       if (data.learningPath.length > 0) {
@@ -211,14 +224,21 @@ export default function AdaptiveTraining({
 
     // Save score to performance ledger
     try {
-      const targetModule = learningPath.find(m => m.id === activeModuleId);
-      await apiFetch("/api/quiz/record-score", {
+      const targetModule = learningPath.find((m) => m.id === activeModuleId);
+      const moduleTitle = targetModule?.title || "Exercices du module";
+      const response = await apiFetch("/api/quiz/record-score", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          moduleTitle: targetModule?.title || "Exercices du module",
-          score: finalScore
-        })
+        body: JSON.stringify({ moduleTitle, score: finalScore }),
+      });
+      const data = await parseApiResponse<{ db: Record<string, unknown> }>(response);
+      if (data.db) onScoreRecorded?.(data.db);
+      await onAssetSaved?.({
+        type: "quiz",
+        title: `Quiz : ${moduleTitle}`,
+        content: `Score obtenu : ${finalScore}% (${correctCount}/${practiceQuiz.length} bonnes réponses)`,
+        score: finalScore,
+        sourceCount: documents.length,
       });
     } catch (e) {
       console.error("Score record failed", e);

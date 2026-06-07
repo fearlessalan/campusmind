@@ -34,7 +34,11 @@ import { AcademicDocument, AudiobookChapter, DocumentChunk, LearningModule, Perf
 import { apiFetch } from "../lib/api";
 import { generateChatResponse } from "../lib/campusAi";
 import { useModal } from "../context/ModalContext";
+import { useAppData } from "../context/AppDataContext";
 import { useWorkflowRunner } from "../hooks/useWorkflowRunner";
+import { useSavedAssets } from "../hooks/useSavedAssets";
+import { SavedAsset, SavedAssetInput, formatTimeAgo } from "../lib/savedAssets";
+import { playBase64Audio } from "../lib/audioPlayer";
 import Logo from "./Logo";
 import IngestionHub from "./IngestionHub";
 import MediaStudio from "./MediaStudio";
@@ -66,13 +70,13 @@ interface Message {
   citations?: DocumentChunk[];
 }
 
-interface UserNote {
-  id: string;
-  title: string;
-  sourceCount: number;
-  timeAgo: string;
-  content: string;
-}
+const ASSET_TYPE_LABELS: Record<SavedAsset["type"], string> = {
+  note: "Note",
+  quiz: "Quiz",
+  exam: "Examen",
+  podcast: "Podcast",
+  audiobook: "Audiobook",
+};
 
 export default function NotebookWorkspace({
   courseId,
@@ -91,7 +95,17 @@ export default function NotebookWorkspace({
   onInitialModalConsumed
 }: NotebookWorkspaceProps) {
   const { showAlert } = useModal();
+  const { syncDbState } = useAppData();
+  const { assets: savedAssets, addAsset, removeAsset } = useSavedAssets(courseId);
   const workflow = useWorkflowRunner(documents, handleWorkflowComplete);
+
+  const saveAsset = async (input: SavedAssetInput) => {
+    await addAsset({ ...input, sourceCount: input.sourceCount ?? documents.length });
+  };
+
+  const handleScoreRecorded = (db: Record<string, unknown>) => {
+    syncDbState(db);
+  };
   const [studioPodcastScript, setStudioPodcastScript] = useState<PodcastScript | null>(null);
   const [studioAudiobookChapters, setStudioAudiobookChapters] = useState<AudiobookChapter[] | undefined>();
 
@@ -148,13 +162,10 @@ export default function NotebookWorkspace({
 
   const [activeStudioModal, setActiveStudioModal] = useState<StudioModal>(null);
 
-  const [userNotes, setUserNotes] = useState<UserNote[]>([]);
-
-  // Editing or creating custom note variables
   const [showAddNotePrompt, setShowAddNotePrompt] = useState(false);
   const [newNoteTitle, setNewNoteTitle] = useState("");
   const [newNoteContent, setNewNoteContent] = useState("");
-  const [viewNoteDetail, setViewNoteDetail] = useState<UserNote | null>(null);
+  const [viewNoteDetail, setViewNoteDetail] = useState<SavedAsset | null>(null);
 
   useEffect(() => {
     if (initialStudioModal) {
@@ -237,27 +248,25 @@ export default function NotebookWorkspace({
     setInputVal(prompt);
   };
 
-  const handleCreateNote = (e: React.FormEvent) => {
+  const handleCreateNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newNoteTitle.trim() || !newNoteContent.trim()) return;
 
-    const newNote: UserNote = {
-      id: "note-custom-" + Date.now(),
+    await saveAsset({
+      type: "note",
       title: newNoteTitle.trim(),
+      content: newNoteContent.trim(),
       sourceCount: checkedDocIds.length || 1,
-      timeAgo: "À l'instant",
-      content: newNoteContent.trim()
-    };
+    });
 
-    setUserNotes(prev => [newNote, ...prev]);
     setNewNoteTitle("");
     setNewNoteContent("");
     setShowAddNotePrompt(false);
   };
 
-  const handleDeleteNote = (id: string, e: React.MouseEvent) => {
+  const handleDeleteNote = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setUserNotes(prev => prev.filter(n => n.id !== id));
+    await removeAsset(id);
     if (viewNoteDetail?.id === id) {
       setViewNoteDetail(null);
     }
@@ -483,15 +492,13 @@ export default function NotebookWorkspace({
                   {/* Actions footer representing screenshot */}
                   <div className="flex items-center gap-4.5 mt-8 pt-4">
                     <button 
-                      onClick={() => {
-                        const newNote: UserNote = {
-                          id: "note-saved-" + Date.now(),
+                      onClick={async () => {
+                        await saveAsset({
+                          type: "note",
                           title: "Note de Synthèse Générée",
+                          content: "Génération automatique d'une note d'assimilation sur " + (documents.find((d) => d.id === activeDocId)?.name || "les chapitres"),
                           sourceCount: checkedDocIds.length,
-                          timeAgo: "À l'instant",
-                          content: "Génération automatique d'une note d'assimilation sur " + (documents.find(d => d.id === activeDocId)?.name || "les chapitres")
-                        };
-                        setUserNotes(prev => [newNote, ...prev]);
+                        });
                         showAlert("Note enregistrée", "Note synthèse consignée dans votre Studio.", "success");
                       }}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200 hover:border-slate-400 transition-all cursor-pointer shadow-3xs"
@@ -708,35 +715,46 @@ export default function NotebookWorkspace({
             <div className="space-y-3 pt-2">
               <div className="flex items-center justify-between">
                 <h3 className="text-[10px] font-mono text-slate-500 uppercase font-bold tracking-widest px-1">
-                  Notes enregistrées ({userNotes.length})
+                  Notes enregistrées ({savedAssets.length})
                 </h3>
               </div>
 
               <div className="space-y-2 max-h-[350px] overflow-y-auto pr-0.5">
-                {userNotes.map((note) => (
-                  <div 
-                    key={note.id}
-                    onClick={() => setViewNoteDetail(note)}
+                {savedAssets.length === 0 && (
+                  <p className="text-[10px] text-slate-400 text-center py-4 px-2">
+                    Quiz, examens, podcasts et notes générés apparaîtront ici.
+                  </p>
+                )}
+                {savedAssets.map((asset) => (
+                  <div
+                    key={asset.id}
+                    onClick={() => setViewNoteDetail(asset)}
                     className="p-3 bg-white hover:bg-slate-100/40 border border-slate-200 hover:border-slate-350 rounded-xl cursor-pointer group relative overflow-hidden transition-all duration-155 shadow-3xs"
                   >
                     <div className="flex items-start justify-between gap-1">
-                      <h4 className="text-xs font-bold text-slate-800 line-clamp-1 group-hover:text-indigo-650">
-                        {note.title}
-                      </h4>
-                      <button 
-                        onClick={(e) => handleDeleteNote(note.id, e)}
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[9px] font-mono uppercase text-indigo-600 font-bold">
+                          {ASSET_TYPE_LABELS[asset.type]}
+                          {asset.score !== undefined ? ` · ${asset.score}%` : ""}
+                        </span>
+                        <h4 className="text-xs font-bold text-slate-800 line-clamp-1 group-hover:text-indigo-650">
+                          {asset.title}
+                        </h4>
+                      </div>
+                      <button
+                        onClick={(e) => handleDeleteNote(asset.id, e)}
                         className="text-slate-400 hover:text-red-650 p-0.5 opacity-0 group-hover:opacity-100 transition-all"
-                        title="Supprimer la note"
+                        title="Supprimer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                     <p className="text-[10px] text-slate-600 line-clamp-2 mt-1 leading-relaxed">
-                      {note.content}
+                      {asset.content}
                     </p>
                     <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-100 text-[9px] font-mono text-slate-500">
-                      <span>{note.sourceCount} source(s)</span>
-                      <span>{note.timeAgo}</span>
+                      <span>{asset.sourceCount} source(s)</span>
+                      <span>{formatTimeAgo(asset.createdAt)}</span>
                     </div>
                   </div>
                 ))}
@@ -812,6 +830,7 @@ export default function NotebookWorkspace({
                   initialMode="podcast"
                   lockedMode
                   initialPodcastScript={studioPodcastScript}
+                  onAssetSaved={saveAsset}
                 />
               )}
 
@@ -821,26 +840,31 @@ export default function NotebookWorkspace({
                   initialMode="audiobook"
                   lockedMode
                   initialAudiobookChapters={studioAudiobookChapters}
+                  onAssetSaved={saveAsset}
                 />
               )}
 
               {activeStudioModal === "training" && (
-                <AdaptiveTraining 
+                <AdaptiveTraining
                   documents={documents}
                   learningPath={learningPath}
                   completedLessons={completedLessons}
                   onCurriculumUpdate={handleCurriculumUpdate}
                   onLessonComplete={handleLessonComplete}
+                  onScoreRecorded={handleScoreRecorded}
+                  onAssetSaved={saveAsset}
                 />
               )}
 
               {activeStudioModal === "exam" && (
-                <ExamSimulator 
+                <ExamSimulator
                   documents={documents}
                   onExamSaved={(newDb) => {
                     handleWorkflowComplete(newDb);
+                    syncDbState(newDb);
                     setActiveStudioModal(null);
                   }}
+                  onAssetSaved={saveAsset}
                 />
               )}
 
@@ -929,18 +953,32 @@ export default function NotebookWorkspace({
           <div className="bg-white border border-slate-200 text-slate-850 w-full max-w-lg rounded-2xl p-6 space-y-4 shadow-2xl animate-scaleUp">
             <div className="flex justify-between items-start pb-3 border-b border-slate-200">
               <div>
-                <span className="text-[9px] font-mono text-slate-400 tracking-wider font-semibold uppercase block">Note de Synthèse</span>
+                <span className="text-[9px] font-mono text-slate-400 tracking-wider font-semibold uppercase block">
+                  {ASSET_TYPE_LABELS[viewNoteDetail.type]}
+                </span>
                 <h3 className="text-sm font-bold text-slate-800">{viewNoteDetail.title}</h3>
               </div>
-              <span className="text-[9px] font-mono text-slate-500">{viewNoteDetail.timeAgo}</span>
+              <span className="text-[9px] font-mono text-slate-500">{formatTimeAgo(viewNoteDetail.createdAt)}</span>
             </div>
 
             <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-line font-sans bg-slate-50 p-4 rounded-xl border border-slate-220">
               {viewNoteDetail.content}
             </p>
 
+            {viewNoteDetail.audioBase64 && (
+              <button
+                onClick={() => playBase64Audio(viewNoteDetail.audioBase64!, viewNoteDetail.audioMimeType || "audio/wav")}
+                className="w-full py-2 text-xs font-semibold bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 rounded-lg flex items-center justify-center gap-1.5"
+              >
+                <Play className="w-3.5 h-3.5" /> Écouter l&apos;audio
+              </button>
+            )}
+
             <div className="flex justify-between items-center text-[10px] text-slate-500">
-              <span>{viewNoteDetail.sourceCount} source(s) liée(s)</span>
+              <span>
+                {viewNoteDetail.sourceCount} source(s) liée(s)
+                {viewNoteDetail.score !== undefined ? ` · ${viewNoteDetail.score}%` : ""}
+              </span>
               <div className="flex gap-2">
                 <button 
                   onClick={() => {

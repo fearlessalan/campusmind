@@ -35,6 +35,7 @@ interface AppDataContextValue {
     learningPath: LearningModule[];
     completedLessons?: string[];
   }) => void;
+  syncDbState: (data: Record<string, unknown>) => void;
 }
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
@@ -277,6 +278,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     fetchState();
   };
 
+  const syncDbState = useCallback((data: Record<string, unknown>) => {
+    applyDbState(data, setters);
+  }, []);
+
   const handleWorkflowComplete = (newDb: {
     documents: AcademicDocument[];
     performance: PerformanceStats;
@@ -313,6 +318,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         handleCurriculumUpdate,
         handleLessonComplete,
         handleWorkflowComplete,
+        syncDbState,
       }}
     >
       {children}

@@ -19,6 +19,9 @@ import {
 } from "lucide-react";
 import { PodcastScript, AudiobookChapter } from "../types";
 import { generateAudiobookStructure, generatePodcastScript } from "../lib/campusAi";
+import { apiFetch, parseApiResponse } from "../lib/api";
+import { playBase64Audio, stopCurrentAudio } from "../lib/audioPlayer";
+import { SavedAssetInput } from "../lib/savedAssets";
 import { useModal } from "../context/ModalContext";
 
 interface MediaStudioProps {
@@ -27,6 +30,7 @@ interface MediaStudioProps {
   lockedMode?: boolean;
   initialPodcastScript?: PodcastScript | null;
   initialAudiobookChapters?: AudiobookChapter[];
+  onAssetSaved?: (input: SavedAssetInput) => Promise<void>;
 }
 
 const speakerLabel = (speaker: string) => {
@@ -41,6 +45,7 @@ export default function MediaStudio({
   lockedMode = false,
   initialPodcastScript = null,
   initialAudiobookChapters,
+  onAssetSaved,
 }: MediaStudioProps) {
   const { showAlert } = useModal();
   const [activeMode, setActiveMode] = useState<"podcast" | "audiobook">(initialMode);
@@ -76,13 +81,11 @@ export default function MediaStudio({
   
   // Audiobook audio items
   const [isPlayingAudiobook, setIsPlayingAudiobook] = useState(false);
-  const [activeSpeechUtterance, setActiveSpeechUtterance] = useState<SpeechSynthesisUtterance | null>(null);
+  const [loadingPodcastAudio, setLoadingPodcastAudio] = useState(false);
+  const [loadingAudiobookAudio, setLoadingAudiobookAudio] = useState(false);
 
   useEffect(() => {
-    // Cleanup any running speech when switching tabs or closing
-    return () => {
-      window.speechSynthesis?.cancel();
-    };
+    return () => stopCurrentAudio();
   }, []);
 
   // -----------------------------------------------------------
@@ -93,91 +96,61 @@ export default function MediaStudio({
     setPodcastScript(null);
     setActivePodcastIdx(null);
     setIsPlayingPodcast(false);
-    window.speechSynthesis?.cancel();
+    stopCurrentAudio();
 
     try {
       if (documents.length === 0) throw new Error("Importez des documents pour générer un podcast.");
       const data = await generatePodcastScript(documents);
       setPodcastScript(data);
-    } catch (err: any) {
-      showAlert("Audio Summary", err.message, "error");
+      const scriptText = data.segments.map((s) => `${speakerLabel(s.speaker)}: ${s.text}`).join("\n");
+      await onAssetSaved?.({
+        type: "podcast",
+        title: data.title,
+        content: scriptText,
+        sourceCount: documents.length,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur inconnue";
+      showAlert("Audio Summary", message, "error");
     } finally {
       setLoadingPodcast(false);
     }
   };
 
-  const playPodcastSpeakLoop = (startIdx: number) => {
+  const playPodcastAudio = async () => {
     if (!podcastScript) return;
+    setLoadingPodcastAudio(true);
     setIsPlayingPodcast(true);
-    window.speechSynthesis?.cancel();
+    stopCurrentAudio();
 
-    const segments = podcastScript.segments;
-    let idx = startIdx;
-
-    const speakNext = () => {
-      if (idx >= segments.length) {
+    try {
+      const response = await apiFetch("/api/tts/podcast", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ segments: podcastScript.segments }),
+      });
+      const data = await parseApiResponse<{ base64Audio: string; mimeType: string }>(response);
+      await playBase64Audio(data.base64Audio, data.mimeType, () => {
         setIsPlayingPodcast(false);
         setActivePodcastIdx(null);
-        return;
-      }
-
-      if (!window.speechSynthesis) {
-        showAlert("Synthèse vocale", "Votre navigateur ne prend pas en charge la synthèse vocale.", "warning");
-        setIsPlayingPodcast(false);
-        return;
-      }
-
-      setActivePodcastIdx(idx);
-      const seg = segments[idx];
-      const utterance = new SpeechSynthesisUtterance(seg.text);
-
-      // Customize voices dynamically between Professor and Student!
-      if (seg.speaker === "Professor") {
-        utterance.pitch = 0.82; // Mature low structured pitch
-        utterance.rate = 0.88;  // Elegant steady tempo
-      } else {
-        utterance.pitch = 1.25; // Youthful bright pitch
-        utterance.rate = 1.05;  // Energetic rapid tempo
-      }
-
-      // Voice mapping fallback checks
-      const voices = window.speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        if (seg.speaker === "Professor") {
-          // Look for native male structured english voices or defaults
-          const maleVoice = voices.find(v => v.name.toLowerCase().includes("male") || v.name.toLowerCase().includes("david") || v.name.toLowerCase().includes("google uk english male"));
-          if (maleVoice) utterance.voice = maleVoice;
-        } else {
-          // Look for native bright female sounds or defaults
-          const femaleVoice = voices.find(v => v.name.toLowerCase().includes("female") || v.name.toLowerCase().includes("zira") || v.name.toLowerCase().includes("microsoft zira") || v.name.toLowerCase().includes("google us english"));
-          if (femaleVoice) utterance.voice = femaleVoice;
-        }
-      }
-
-      utterance.onend = () => {
-        idx += 1;
-        speakNext();
-      };
-
-      utterance.onerror = (e) => {
-        console.error("Speech utterance err", e);
-        setIsPlayingPodcast(false);
-        setActivePodcastIdx(null);
-      };
-
-      window.speechSynthesis.speak(utterance);
-    };
-
-    speakNext();
+      });
+      setActivePodcastIdx(0);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur TTS";
+      showAlert("Synthèse vocale", message, "error");
+      setIsPlayingPodcast(false);
+    } finally {
+      setLoadingPodcastAudio(false);
+    }
   };
 
   const pausePodcast = () => {
-    window.speechSynthesis?.cancel();
+    stopCurrentAudio();
     setIsPlayingPodcast(false);
   };
 
   const stopPodcast = () => {
-    window.speechSynthesis?.cancel();
+    stopCurrentAudio();
     setIsPlayingPodcast(false);
     setActivePodcastIdx(null);
   };
@@ -190,48 +163,54 @@ export default function MediaStudio({
     setAudiobookChapters([]);
     setActiveChapterIdx(0);
     setIsPlayingAudiobook(false);
-    window.speechSynthesis?.cancel();
+    stopCurrentAudio();
 
     try {
       if (documents.length === 0) throw new Error("Importez des documents pour générer un audiobook.");
       const data = await generateAudiobookStructure(documents);
       setAudiobookChapters(data.chapters);
-    } catch (err: any) {
-      showAlert("Audiobook", err.message, "error");
+      for (const chapter of data.chapters) {
+        await onAssetSaved?.({
+          type: "audiobook",
+          title: chapter.title,
+          content: chapter.text,
+          sourceCount: documents.length,
+        });
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur inconnue";
+      showAlert("Audiobook", message, "error");
     } finally {
       setLoadingAudiobook(false);
     }
   };
 
-  const playAudiobookSection = () => {
+  const playAudiobookSection = async () => {
     if (audiobookChapters.length === 0) return;
+    const chapter = audiobookChapters[activeChapterIdx];
+    setLoadingAudiobookAudio(true);
     setIsPlayingAudiobook(true);
-    window.speechSynthesis?.cancel();
+    stopCurrentAudio();
 
-    const chapterText = audiobookChapters[activeChapterIdx].text;
-    const utterance = new SpeechSynthesisUtterance(chapterText);
-    utterance.pitch = 0.95;
-    utterance.rate = 0.92; // Serene read mode
-
-    const voices = window.speechSynthesis?.getVoices();
-    if (voices && voices.length > 0) {
-      const readingVoice = voices.find(v => v.name.toLowerCase().includes("google uk english female") || v.name.toLowerCase().includes("natural") || v.name.toLowerCase().includes("zira"));
-      if (readingVoice) utterance.voice = readingVoice;
+    try {
+      const response = await apiFetch("/api/tts/audiobook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: chapter.text, title: chapter.title }),
+      });
+      const data = await parseApiResponse<{ base64Audio: string; mimeType: string }>(response);
+      await playBase64Audio(data.base64Audio, data.mimeType, () => setIsPlayingAudiobook(false));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur TTS";
+      showAlert("Audiobook", message, "error");
+      setIsPlayingAudiobook(false);
+    } finally {
+      setLoadingAudiobookAudio(false);
     }
-
-    utterance.onend = () => {
-      setIsPlayingAudiobook(false);
-    };
-
-    utterance.onerror = () => {
-      setIsPlayingAudiobook(false);
-    };
-
-    window.speechSynthesis.speak(utterance);
   };
 
   const pauseAudiobook = () => {
-    window.speechSynthesis?.cancel();
+    stopCurrentAudio();
     setIsPlayingAudiobook(false);
   };
 
@@ -268,7 +247,7 @@ export default function MediaStudio({
         {!lockedMode && (
           <div className="flex bg-surface-container-high p-1.5 rounded-xl border border-outline-variant self-start sm:self-center">
             <button
-              onClick={() => { setActiveMode("podcast"); window.speechSynthesis?.cancel(); setIsPlayingAudiobook(false); setIsPlayingPodcast(false); }}
+              onClick={() => { setActiveMode("podcast"); stopCurrentAudio(); setIsPlayingAudiobook(false); setIsPlayingPodcast(false); }}
               className={`px-4 py-2 text-xs font-semibold rounded-lg select-none transition-all cursor-pointer ${
                 activeMode === "podcast" ? "bg-primary text-on-primary shadow-xs" : "text-on-surface-variant hover:text-on-surface"
               }`}
@@ -276,7 +255,7 @@ export default function MediaStudio({
               Audio Summary
             </button>
             <button
-              onClick={() => { setActiveMode("audiobook"); window.speechSynthesis?.cancel(); setIsPlayingPodcast(false); setIsPlayingAudiobook(false); }}
+              onClick={() => { setActiveMode("audiobook"); stopCurrentAudio(); setIsPlayingPodcast(false); setIsPlayingAudiobook(false); }}
               className={`px-4 py-2 text-xs font-semibold rounded-lg select-none transition-all cursor-pointer ${
                 activeMode === "audiobook" ? "bg-primary text-on-primary shadow-xs" : "text-on-surface-variant hover:text-on-surface"
               }`}
@@ -340,10 +319,12 @@ export default function MediaStudio({
                 <div className="space-y-2">
                   {!isPlayingPodcast ? (
                     <button
-                      onClick={() => playPodcastSpeakLoop(activePodcastIdx || 0)}
+                      onClick={playPodcastAudio}
+                      disabled={loadingPodcastAudio}
                       className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl shadow-sm transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      <Play className="w-4 h-4 fill-white" /> Lancer la lecture
+                      {loadingPodcastAudio ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-white" />}
+                      {loadingPodcastAudio ? "Génération audio..." : "Lancer la lecture"}
                     </button>
                   ) : (
                     <div className="flex gap-2">
@@ -469,7 +450,7 @@ export default function MediaStudio({
                     return (
                       <div
                         key={idx}
-                        onClick={() => { setActiveChapterIdx(idx); window.speechSynthesis?.cancel(); setIsPlayingAudiobook(false); }}
+                        onClick={() => { setActiveChapterIdx(idx); stopCurrentAudio(); setIsPlayingAudiobook(false); }}
                         className={`p-3.5 border rounded-xl cursor-pointer transition-all flex flex-col text-xs leading-relaxed gap-0.5 ${
                           isActive
                             ? "border-indigo-500 bg-indigo-50/10"
@@ -490,9 +471,11 @@ export default function MediaStudio({
                 {!isPlayingAudiobook ? (
                   <button
                     onClick={playAudiobookSection}
-                    className="w-full py-3 bg-indigo-650 bg-indigo-600 text-white font-semibold text-xs rounded-xl shadow-xs transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer"
+                    disabled={loadingAudiobookAudio}
+                    className="w-full py-3 bg-indigo-650 bg-indigo-600 text-white font-semibold text-xs rounded-xl shadow-xs transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
                   >
-                    <Play className="w-3.5 h-3.5 fill-white" /> Lire le chapitre actif
+                    {loadingAudiobookAudio ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-white" />}
+                    {loadingAudiobookAudio ? "Génération audio..." : "Lire le chapitre actif"}
                   </button>
                 ) : (
                   <button

@@ -2,8 +2,26 @@ import type { NextRequest } from "next/server";
 import { Type } from "@google/genai";
 import { getUserData } from "../db";
 import { getGemini } from "../gemini";
+import { normalizeGeminiAudio } from "../audio";
 import { LANG_FR } from "../lang";
 import { errorResponse, jsonResponse } from "../response";
+
+const TTS_MODEL = "gemini-2.5-pro-preview-tts";
+
+const FRENCH_DIRECTOR_NOTE = `# Profil audio
+Speaker 1 : Professeur expert, voix posée et pédagogique.
+Speaker 2 : Étudiant curieux, voix dynamique et enthousiaste.
+
+# Note du réalisateur
+Langue : Français (France). Style : conversation naturelle et chaleureuse. Rythme : modéré.
+Accent : français standard. Ton : pédagogique, engageant.`;
+
+const FRENCH_AUDIOBOOK_NOTE = `# Profil audio
+Narrateur : voix claire, professionnelle et posée pour la lecture académique.
+
+# Note du réalisateur
+Langue : Français (France). Style : lecture fidèle et fluide. Rythme : modéré, posé.
+Accent : français standard. Ton : neutre et pédagogique.`;
 
 export async function handlePodcastScript(req: NextRequest) {
   const db = await getUserData(req);
@@ -111,16 +129,42 @@ ${JSON.stringify(allChunks.slice(0, 15))}${LANG_FR}`;
   }
 }
 
+function buildPodcastTranscript(segments: { speaker: string; text: string }[]): string {
+  return segments
+    .map((seg) => {
+      const label = seg.speaker === "Professor" ? "Speaker 1" : "Speaker 2";
+      return `${label}: ${seg.text}`;
+    })
+    .join("\n");
+}
+
 export async function handleTts(req: NextRequest) {
   const { text, speaker } = await req.json();
+  if (!text) return errorResponse("Texte manquant.");
+
   try {
     const ai = getGemini();
-    const voice = speaker === "Professor" ? "Charon" : "Kore";
+    const voice = speaker === "Professor" ? "Puck" : "Kore";
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-flash-tts-preview",
-      contents: [{ parts: [{ text: `Say with extreme academic passion: ${text}` }] }],
+      model: TTS_MODEL,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: `Lis le texte suivant en français.
+
+${FRENCH_AUDIOBOOK_NOTE}
+
+## Transcript :
+${text}`,
+            },
+          ],
+        },
+      ],
       config: {
+        temperature: 1,
         responseModalities: ["AUDIO"],
         speechConfig: {
           voiceConfig: {
@@ -130,20 +174,123 @@ export async function handleTts(req: NextRequest) {
       },
     });
 
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (base64Audio) {
-      return jsonResponse({ base64Audio });
+    const inlineData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+    if (inlineData?.data) {
+      const audio = normalizeGeminiAudio(inlineData);
+      return jsonResponse(audio);
     }
-    return errorResponse("No voice generated from Gemini TTS", 400);
+    return errorResponse("Aucun audio généré.", 400);
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : "TTS unavailable";
-    console.warn(
-      "Gemini Paid TTS is unavailable, client-side Web Speech API will handle the narration audio nicely:",
-      message
-    );
-    return errorResponse(
-      "Gemini TTS unavailable (Requires Paid API Key config). Using client-side Web Speech synthesis fallback instead.",
-      503
-    );
+    const message = e instanceof Error ? e.message : "TTS indisponible";
+    console.error("TTS error:", message);
+    return errorResponse(message, 503);
+  }
+}
+
+export async function handlePodcastTts(req: NextRequest) {
+  const { segments } = await req.json() as { segments: { speaker: string; text: string }[] };
+  if (!segments?.length) return errorResponse("Segments manquants.");
+
+  try {
+    const ai = getGemini();
+    const transcript = buildPodcastTranscript(segments);
+
+    const response = await ai.models.generateContent({
+      model: TTS_MODEL,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: `Lis la transcription suivante selon le profil audio et la note du réalisateur.
+
+${FRENCH_DIRECTOR_NOTE}
+
+## Transcript :
+${transcript}`,
+            },
+          ],
+        },
+      ],
+      config: {
+        temperature: 1,
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          multiSpeakerVoiceConfig: {
+            speakerVoiceConfigs: [
+              {
+                speaker: "Speaker 1",
+                voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } },
+              },
+              {
+                speaker: "Speaker 2",
+                voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } },
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    const inlineData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+    if (inlineData?.data) {
+      const audio = normalizeGeminiAudio(inlineData);
+      return jsonResponse(audio);
+    }
+    return errorResponse("Aucun audio podcast généré.", 400);
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "TTS podcast indisponible";
+    console.error("Podcast TTS error:", message);
+    return errorResponse(message, 503);
+  }
+}
+
+export async function handleAudiobookTts(req: NextRequest) {
+  const { text, title } = await req.json();
+  if (!text) return errorResponse("Texte manquant.");
+
+  try {
+    const ai = getGemini();
+
+    const response = await ai.models.generateContent({
+      model: TTS_MODEL,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: `Lis le chapitre suivant en français, de manière fidèle et naturelle.
+
+${FRENCH_AUDIOBOOK_NOTE}
+
+## Chapitre : ${title || "Sans titre"}
+
+## Transcript :
+${text}`,
+            },
+          ],
+        },
+      ],
+      config: {
+        temperature: 1,
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: "Kore" },
+          },
+        },
+      },
+    });
+
+    const inlineData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+    if (inlineData?.data) {
+      const audio = normalizeGeminiAudio(inlineData);
+      return jsonResponse(audio);
+    }
+    return errorResponse("Aucun audio audiobook généré.", 400);
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "TTS audiobook indisponible";
+    console.error("Audiobook TTS error:", message);
+    return errorResponse(message, 503);
   }
 }
