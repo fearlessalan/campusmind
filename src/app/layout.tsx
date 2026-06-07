@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description:
     "CampusMind — Plateforme d'apprentissage IA qui transforme vos documents académiques en parcours d'étude personnalisés.",
   icons: {
-    icon: "/campusmindlogo.png",
+    icon: "/logo.svg",
   },
 };
 

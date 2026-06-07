@@ -11,11 +11,11 @@ import {
 import { jsonResponse } from "../response";
 
 export async function handleGetDb(req: NextRequest) {
-  return jsonResponse(getUserData(req));
+  return jsonResponse(await getUserData(req));
 }
 
 export async function handleResetDb(req: NextRequest) {
-  const email = getUserEmail(req);
+  const email = await getUserEmail(req);
   if (email) {
     const db = readDB();
     if (!db.users) db.users = {};
@@ -34,7 +34,7 @@ export async function handleResetDb(req: NextRequest) {
 }
 
 export async function handleResetPerformance(req: NextRequest) {
-  const userDB = getUserData(req);
+  const userDB = await getUserData(req);
   userDB.performance = {
     progress: 0,
     retention: 0,
@@ -47,6 +47,6 @@ export async function handleResetPerformance(req: NextRequest) {
   }));
   userDB.completedLessons = [];
   userDB.quizHistory = [];
-  writeUserData(req, userDB);
+  await writeUserData(req, userDB);
   return jsonResponse({ message: "Progression réinitialisée.", db: userDB });
 }

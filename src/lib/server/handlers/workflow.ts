@@ -4,13 +4,13 @@ import { getGemini } from "../gemini";
 import { errorResponse, jsonResponse } from "../response";
 
 export async function handleWorkflowFinalize(req: NextRequest) {
-  const db = getUserData(req);
+  const db = await getUserData(req);
   const examScore = 65 + Math.floor(Math.random() * 25);
   db.performance.progress = examScore;
   db.performance.retention = Math.max(55, examScore - 10);
   db.performance.exam_readiness = examScore;
   db.performance.scoreHistory.push(examScore);
-  writeUserData(req, db);
+  await writeUserData(req, db);
   return jsonResponse({
     status: "success",
     message: `[Insights Agent] Pipeline complet — score examen : ${examScore}%. Recommandations : Revoir le module 3`,
@@ -20,7 +20,7 @@ export async function handleWorkflowFinalize(req: NextRequest) {
 
 export async function handleWorkflowExecuteStep(req: NextRequest) {
   const { stepId } = await req.json();
-  const db = getUserData(req);
+  const db = await getUserData(req);
   const allChunks = (
     db.documents as { chunks: { chapter: string }[] }[]
   ).flatMap((d) => d.chunks);
@@ -101,7 +101,7 @@ export async function handleWorkflowExecuteStep(req: NextRequest) {
         db.performance.retention = Math.max(55, examScore - 10);
         db.performance.exam_readiness = examScore;
         db.performance.scoreHistory.push(examScore);
-        writeUserData(req, db);
+        await writeUserData(req, db);
         return jsonResponse({
           status: "success",
           message: `[Insights Agent] Pipeline complet — score examen : ${examScore}%. Recommandations : ${recommendations.join(", ")}`,

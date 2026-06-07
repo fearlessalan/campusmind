@@ -7,7 +7,7 @@ import { errorResponse, jsonResponse } from "../response";
 
 export async function handleIngest(req: NextRequest) {
   const { fileName, fileType, fileContent, manualText, preChunks, fileSize } = await req.json();
-  const userData = getUserData(req);
+  const userData = await getUserData(req);
   if (!userData.documents) userData.documents = [];
 
   try {
@@ -33,7 +33,7 @@ export async function handleIngest(req: NextRequest) {
       };
 
       userData.documents.push(newDoc);
-      writeUserData(req, userData);
+      await writeUserData(req, userData);
       return jsonResponse({ success: true, document: newDoc });
     }
 
@@ -58,7 +58,7 @@ export async function handleIngest(req: NextRequest) {
       };
 
       userData.documents.push(newDoc);
-      writeUserData(req, userData);
+      await writeUserData(req, userData);
       return jsonResponse({ success: true, document: newDoc });
     }
 
@@ -129,7 +129,7 @@ Réponds UNIQUEMENT en JSON valide avec un tableau "chunks". Pas de markdown.${L
       };
 
       userData.documents.push(newDoc);
-      writeUserData(req, userData);
+      await writeUserData(req, userData);
       return jsonResponse({ success: true, document: newDoc });
     }
 

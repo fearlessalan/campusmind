@@ -1,20 +1,21 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# CampusMind
 
-# Run and deploy your AI Studio app
+Transformez vos documents académiques en parcours d'apprentissage personnalisés, propulsés par Gemini et Firebase.
 
-This contains everything you need to run your app locally.
+## Lancer en local
 
-View your app in AI Studio: https://ai.studio/apps/332267d2-d5eb-4257-b105-461864917293
+**Prérequis :** Node.js
 
-## Run Locally
+1. Installer les dépendances :
+   ```bash
+   npm install
+   ```
+2. Copier `.env.example` vers `.env` et renseigner :
+   - `GEMINI_API_KEY` — clé API Gemini pour le serveur
+   - `NEXT_PUBLIC_FIREBASE_*` — configuration Firebase (Auth + Firestore)
+3. Démarrer l'application :
+   ```bash
+   npm run dev
+   ```
 
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+L'application sera accessible sur [http://localhost:3000](http://localhost:3000).

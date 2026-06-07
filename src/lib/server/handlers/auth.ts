@@ -50,7 +50,7 @@ export async function handleLogin(req: NextRequest) {
 }
 
 export async function handleMe(req: NextRequest) {
-  const email = getUserEmail(req);
+  const email = await getUserEmail(req);
   if (email) {
     const db = readDB();
     const users = db.users as Record<string, unknown> | undefined;

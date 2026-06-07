@@ -5,20 +5,33 @@ export function hashPassword(password: string): string {
   return crypto.createHash("sha256").update(password).digest("hex");
 }
 
-export function getUserEmail(req: NextRequest): string | null {
+async function verifyFirebaseIdToken(idToken: string): Promise<string | null> {
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim();
+  if (!apiKey) return null;
+
+  try {
+    const res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      }
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as { users?: { email?: string }[] };
+    const email = data.users?.[0]?.email;
+    return email ? email.trim().toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getUserEmail(req: NextRequest): Promise<string | null> {
   const authHeader = req.headers.get("authorization");
   if (authHeader?.startsWith("Bearer ")) {
-    try {
-      const token = authHeader.substring(7);
-      const email = Buffer.from(token, "base64").toString("utf8");
-      return email.trim().toLowerCase();
-    } catch {
-      /* invalid token */
-    }
-  }
-  const headerEmail = req.headers.get("x-user-email");
-  if (headerEmail) {
-    return headerEmail.trim().toLowerCase();
+    const idToken = authHeader.substring(7);
+    return verifyFirebaseIdToken(idToken);
   }
   return null;
 }

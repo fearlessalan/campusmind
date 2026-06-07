@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { 
   BookOpen, 
   Plus, 
@@ -27,14 +28,14 @@ import {
   Play,
   FileText,
   Clock,
-  Trash2,
-  Brain
+  Trash2
 } from "lucide-react";
 import { AcademicDocument, AudiobookChapter, DocumentChunk, LearningModule, PerformanceStats, PodcastScript } from "../types";
 import { apiFetch } from "../lib/api";
 import { generateChatResponse } from "../lib/campusAi";
 import { useModal } from "../context/ModalContext";
 import { useWorkflowRunner } from "../hooks/useWorkflowRunner";
+import Logo from "./Logo";
 import IngestionHub from "./IngestionHub";
 import MediaStudio from "./MediaStudio";
 import AdaptiveTraining from "./AdaptiveTraining";
@@ -43,13 +44,14 @@ import WorkflowBuilder from "./WorkflowBuilder";
 import WorkflowProgressPanel from "./WorkflowProgressPanel";
 
 interface NotebookWorkspaceProps {
+  courseId: string;
+  courseTitle: string;
   documents: AcademicDocument[];
   performance: PerformanceStats;
   learningPath: LearningModule[];
   completedLessons: string[];
   activeDocId: string | null;
   onSelectDoc: (id: string | null) => void;
-  onBackToDashboard: () => void;
   handleIngestSuccess: (doc: AcademicDocument) => void;
   handleCurriculumUpdate: (path: LearningModule[], evaluation: any) => void;
   handleLessonComplete: (moduleId: string) => void;
@@ -73,13 +75,14 @@ interface UserNote {
 }
 
 export default function NotebookWorkspace({
+  courseId,
+  courseTitle,
   documents,
   performance,
   learningPath,
   completedLessons,
   activeDocId,
   onSelectDoc,
-  onBackToDashboard,
   handleIngestSuccess,
   handleCurriculumUpdate,
   handleLessonComplete,
@@ -291,25 +294,23 @@ export default function NotebookWorkspace({
       {/* 🧭 Top Navigation Header (Replica matching the image style) */}
       <header className="h-[64px] bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 z-40">
         <div className="flex items-center gap-4">
-          <button 
-            onClick={onBackToDashboard}
+          <Link
+            href={`/dashboard/${courseId}`}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/80 transition-all cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
             <span className="text-xs font-semibold">Tableau de bord</span>
-          </button>
-          
+          </Link>
+
           <div className="h-4 w-[1px] bg-slate-300" />
-          
+
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-indigo-600/10 flex items-center justify-center border border-indigo-500/10 shadow-inner animate-pulse">
-              <Brain className="w-4 h-4 text-indigo-500" />
-            </div>
+            <Logo size={28} />
             <div>
               <h2 className="text-sm font-bold text-slate-800 tracking-tight flex items-center gap-1.5 line-clamp-1 max-w-sm md:max-w-xl">
                 {activeDocTitle}
               </h2>
-              <span className="text-[10px] font-mono text-slate-500 block tracking-wider uppercase">Espace de discussion actif</span>
+              <span className="text-[10px] font-mono text-slate-500 block tracking-wider uppercase">{courseTitle}</span>
             </div>
           </div>
         </div>

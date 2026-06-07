@@ -6,7 +6,7 @@ import { LANG_FR } from "../lang";
 import { errorResponse, jsonResponse } from "../response";
 
 export async function handleGenerateExam(req: NextRequest) {
-  const db = getUserData(req);
+  const db = await getUserData(req);
   const allChunks = (db.documents as { chunks: unknown[] }[]).flatMap((d) => d.chunks);
 
   if (allChunks.length === 0) {
@@ -65,7 +65,7 @@ Réponds en JSON valide.${LANG_FR}`;
 
 export async function handleEvaluateExam(req: NextRequest) {
   const { examPaper, studentAnswers } = await req.json();
-  const db = getUserData(req);
+  const db = await getUserData(req);
 
   try {
     const ai = getGemini();
@@ -152,7 +152,7 @@ ${JSON.stringify(studentAnswers)}${LANG_FR}`;
       score: results.score,
     });
 
-    writeUserData(req, db);
+    await writeUserData(req, db);
 
     return jsonResponse({ success: true, grading: results, dbState: db });
   } catch (error: unknown) {
@@ -164,7 +164,7 @@ ${JSON.stringify(studentAnswers)}${LANG_FR}`;
 
 export async function handleSaveGrading(req: NextRequest) {
   const { grading, examTitle } = await req.json();
-  const db = getUserData(req);
+  const db = await getUserData(req);
   if (!grading) return errorResponse("Résultats de correction manquants.");
   db.performance.exam_readiness = grading.score;
   db.performance.retention = Math.round((db.performance.retention + grading.score) / 2);
@@ -174,6 +174,6 @@ export async function handleSaveGrading(req: NextRequest) {
     type: `Simulateur : ${examTitle || "Examen blanc"}`,
     score: grading.score,
   });
-  writeUserData(req, db);
+  await writeUserData(req, db);
   return jsonResponse({ success: true, grading, dbState: db });
 }

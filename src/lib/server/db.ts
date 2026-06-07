@@ -93,8 +93,8 @@ export function writeDB(db: Record<string, unknown>) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function getUserData(req: NextRequest): any {
-  const email = getUserEmail(req);
+export async function getUserData(req: NextRequest): Promise<any> {
+  const email = await getUserEmail(req);
   const db = readDB();
   if (email) {
     if (!db.users) db.users = {};
@@ -112,8 +112,8 @@ export function getUserData(req: NextRequest): any {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function writeUserData(req: NextRequest, data: any) {
-  const email = getUserEmail(req);
+export async function writeUserData(req: NextRequest, data: any) {
+  const email = await getUserEmail(req);
   const db = readDB();
   if (email) {
     if (!db.users) db.users = {};

@@ -1,73 +1,47 @@
 "use client";
 
-import React, { useState } from "react";
-import { 
-  BookOpen, 
-  Sparkles, 
-  Trash2, 
-  FileText, 
-  GraduationCap, 
-  TrendingUp, 
-  Activity, 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import {
+  BookOpen,
+  Sparkles,
+  Trash2,
+  FileText,
+  GraduationCap,
+  TrendingUp,
+  Activity,
   Award,
   RefreshCw,
-  Plus,
-  BookMarked,
-  X
+  ArrowLeft,
 } from "lucide-react";
-import { AcademicDocument, PerformanceStats, Course } from "../types";
+import { AcademicDocument, Course, PerformanceStats } from "@/types";
 
-interface DashboardProps {
+interface CourseDashboardProps {
+  course: Course;
   documents: AcademicDocument[];
   performance: PerformanceStats & { scoreHistory?: number[] };
+  activeDocId: string | null;
+  onSelectDoc: (docId: string) => void;
   onResetDB: () => void;
   onResetPerformance: () => void;
-  onSelectDoc: (docId: string) => void;
-  activeDocId: string | null;
-  onEnterWorkspace: () => void;
-  courses: Course[];
-  activeCourseId: string;
-  onCreateCourse: (title: string, description: string) => void;
-  onSelectCourse: (courseId: string) => void;
-  onDeleteCourse: (courseId: string) => void;
 }
 
-export default function Dashboard({
+export default function CourseDashboard({
+  course,
   documents,
   performance,
+  activeDocId,
+  onSelectDoc,
   onResetDB,
   onResetPerformance,
-  onSelectDoc,
-  activeDocId,
-  onEnterWorkspace,
-  courses,
-  activeCourseId,
-  onCreateCourse,
-  onSelectCourse,
-  onDeleteCourse
-}: DashboardProps) {
-  const [isCreating, setIsCreating] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newDesc, setNewDesc] = useState("");
-
-  const handleSubmitCourse = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim()) return;
-    onCreateCourse(newTitle, newDesc);
-    setNewTitle("");
-    setNewDesc("");
-    setIsCreating(false);
-  };
-
+}: CourseDashboardProps) {
+  const router = useRouter();
   const hasDocs = documents.length > 0;
   const history = performance.scoreHistory || [];
   const moduleCount = performance.progress ? Math.round(performance.progress / 25) : 0;
 
   const getChapterScore = (chapterName: string, idx: number) => {
-    const relatedModule = documents.length > 0
-      ? undefined
-      : undefined;
-    void relatedModule;
+    void chapterName;
     const base = performance.exam_readiness || 0;
     if (base === 0) return null;
     const variance = [0.6, 0.85, 1.0][idx % 3];
@@ -79,28 +53,26 @@ export default function Dashboard({
       <div className="flex flex-col md:flex-row md:items-center md:justify-between p-6 bg-primary-container/50 border border-primary/15 rounded-2xl text-on-surface md-elevation-2 relative overflow-hidden">
         <div className="absolute right-0 top-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 space-y-2">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-1.5 text-xs text-on-surface-variant hover:text-primary transition-colors mb-1"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" /> Tous les cours
+          </Link>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium border border-primary/20">
-            <Sparkles className="w-3.5 h-3.5" /> Moteur d'apprentissage IA actif
+            <Sparkles className="w-3.5 h-3.5" /> Moteur d&apos;apprentissage IA actif
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">Tableau de bord CampusMind</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{course.title}</h1>
           <p className="text-on-surface-variant text-sm max-w-xl">
-            Plateforme d'apprentissage IA qui transforme vos documents en parcours personnalisés : chat RAG, podcasts, examens simulés et analytics.
+            {course.description || "Parcours personnalisé : chat RAG, podcasts, examens simulés et analytics."}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 mt-4 md:mt-0 relative z-10">
-          <button
-            onClick={onEnterWorkspace}
-            disabled={courses.length === 0}
-            className="md-btn-filled disabled:opacity-50"
-          >
-            Ouvrir l'espace de travail →
-          </button>
-          <button
-            onClick={onResetPerformance}
-            disabled={courses.length === 0}
-            className="md-btn-tonal disabled:opacity-40"
-          >
+          <Link href={`/workspace/${course.id}`} className="md-btn-filled">
+            Ouvrir l&apos;espace de travail →
+          </Link>
+          <button onClick={onResetPerformance} className="md-btn-tonal">
             <RefreshCw className="w-3.5 h-3.5" /> Réinitialiser la progression
           </button>
           <button
@@ -110,135 +82,6 @@ export default function Dashboard({
             <Trash2 className="w-3.5 h-3.5" /> Effacer les documents
           </button>
         </div>
-      </div>
-
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-on-surface flex items-center gap-2">
-              <GraduationCap className="w-5 h-5 text-primary" /> Mes cours
-            </h2>
-            <p className="text-on-surface-variant text-sm">
-              Sélectionnez un cours pour charger ses documents, modules et outils d'étude.
-            </p>
-          </div>
-          
-          {!isCreating && (
-            <button onClick={() => setIsCreating(true)} className="md-btn-filled text-sm">
-              <Plus className="w-3.5 h-3.5" /> Nouveau cours
-            </button>
-          )}
-        </div>
-
-        {isCreating && (
-          <form onSubmit={handleSubmitCourse} className="p-5 md-card space-y-4 animate-fadeIn">
-            <div className="flex items-center justify-between pb-2 border-b border-outline-variant">
-              <span className="text-sm font-bold text-on-surface flex items-center gap-1.5">
-                <BookMarked className="w-4 h-4 text-primary" /> Créer un cours
-              </span>
-              <button type="button" onClick={() => setIsCreating(false)} className="md-btn-text p-1">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-on-surface">Nom du cours *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="ex. : Algorithmique, Économie, Droit..."
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  className="md-textfield-outlined"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-on-surface">Description</label>
-                <input
-                  type="text"
-                  placeholder="ex. : Préparation à l'examen final"
-                  value={newDesc}
-                  onChange={(e) => setNewDesc(e.target.value)}
-                  className="md-textfield-outlined"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setIsCreating(false)} className="md-btn-outlined text-sm">
-                Annuler
-              </button>
-              <button type="submit" className="md-btn-filled text-sm">
-                Créer le cours
-              </button>
-            </div>
-          </form>
-        )}
-
-        {courses.length === 0 ? (
-          <div className="p-10 text-center border border-dashed border-outline-variant bg-surface-container-low rounded-2xl flex flex-col items-center space-y-3">
-            <GraduationCap className="w-10 h-10 text-outline-variant" />
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-on-surface">Aucun cours</p>
-              <p className="text-sm text-on-surface-variant max-w-md">
-                Créez votre premier cours pour importer vos documents et commencer à apprendre.
-              </p>
-            </div>
-            <button onClick={() => setIsCreating(true)} className="md-btn-filled text-sm">
-              <Plus className="w-3.5 h-3.5" /> Créer mon premier cours
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {courses.map((course) => {
-              const isActive = course.id === activeCourseId;
-              const docCount = course.documents?.length || 0;
-              const modCount = course.learningPath?.length || 0;
-              
-              return (
-                <div
-                  key={course.id}
-                  onClick={() => onSelectCourse(course.id)}
-                  className={`p-5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between h-[154px] ${
-                    isActive
-                      ? "border-primary bg-primary-container/20 md-elevation-2 ring-1 ring-primary/20"
-                      : "border-outline-variant bg-surface-container-low hover:md-elevation-2"
-                  }`}
-                >
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className={`md-chip text-[10px] ${isActive ? "md-chip-selected" : ""}`}>
-                        {isActive ? "Actif" : "Inactif"}
-                      </span>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onDeleteCourse(course.id); }}
-                        className="p-1 text-outline hover:text-error hover:bg-error-container rounded-lg cursor-pointer opacity-0 group-hover:opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all"
-                        title="Supprimer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <h3 className="font-bold text-on-surface text-sm truncate">{course.title}</h3>
-                    <p className="text-xs text-on-surface-variant line-clamp-2">
-                      {course.description || "Aucune description."}
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between pt-2.5 border-t border-outline-variant text-xs text-on-surface-variant mt-2">
-                    <span className="flex items-center gap-1">
-                      <FileText className="w-3.5 h-3.5 text-primary" />
-                      <strong>{docCount}</strong> doc{docCount > 1 ? "s" : ""}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <BookOpen className="w-3.5 h-3.5 text-primary" />
-                      <strong>{modCount}</strong> module{modCount > 1 ? "s" : ""}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -270,7 +113,11 @@ export default function Dashboard({
             )}
             {i === 2 && <p className="text-xs text-on-surface-variant mt-3">Basé sur la répétition espacée</p>}
             {i === 3 && <p className="text-xs text-on-surface-variant mt-3">Analyse des quiz et examens</p>}
-            {i === 0 && <p className="text-xs text-on-surface-variant mt-3 flex items-center gap-1"><TrendingUp className="w-3 h-3 text-success" /> Dérivé des évaluations</p>}
+            {i === 0 && (
+              <p className="text-xs text-on-surface-variant mt-3 flex items-center gap-1">
+                <TrendingUp className="w-3 h-3 text-success" /> Dérivé des évaluations
+              </p>
+            )}
           </div>
         ))}
       </div>
@@ -300,19 +147,26 @@ export default function Dashboard({
                 <line x1="30" y1="120" x2="480" y2="120" stroke="#E7E0EC" strokeWidth="1" />
                 <line x1="30" y1="170" x2="480" y2="170" stroke="#F3EDF7" strokeWidth="1" strokeDasharray="4" />
                 <path
-                  d={history.map((val, idx) => {
-                    const x = 30 + (idx / Math.max(1, history.length - 1)) * 440;
-                    const y = 170 - (val / 100) * 150;
-                    return `${idx === 0 ? "M" : "L"} ${x} ${y}`;
-                  }).join(" ")}
-                  fill="none" stroke="#6750A4" strokeWidth="3.5" strokeLinecap="round"
+                  d={history
+                    .map((val, idx) => {
+                      const x = 30 + (idx / Math.max(1, history.length - 1)) * 440;
+                      const y = 170 - (val / 100) * 150;
+                      return `${idx === 0 ? "M" : "L"} ${x} ${y}`;
+                    })
+                    .join(" ")}
+                  fill="none"
+                  stroke="#6750A4"
+                  strokeWidth="3.5"
+                  strokeLinecap="round"
                 />
                 <path
-                  d={`${history.map((val, idx) => {
-                    const x = 30 + (idx / Math.max(1, history.length - 1)) * 440;
-                    const y = 170 - (val / 100) * 150;
-                    return `${idx === 0 ? "M" : "L"} ${x} ${y}`;
-                  }).join(" ")} L 470 170 L 30 170 Z`}
+                  d={`${history
+                    .map((val, idx) => {
+                      const x = 30 + (idx / Math.max(1, history.length - 1)) * 440;
+                      const y = 170 - (val / 100) * 150;
+                      return `${idx === 0 ? "M" : "L"} ${x} ${y}`;
+                    })
+                    .join(" ")} L 470 170 L 30 170 Z`}
                   fill="url(#scoreGrad)"
                 />
                 {history.map((val, idx) => {
@@ -321,7 +175,9 @@ export default function Dashboard({
                   return (
                     <g key={idx}>
                       <circle cx={x} cy={y} r="5" fill="#6750A4" />
-                      <text x={x} y={y - 10} textAnchor="middle" className="text-[10px] font-bold fill-on-surface">{val}%</text>
+                      <text x={x} y={y - 10} textAnchor="middle" className="text-[10px] font-bold fill-on-surface">
+                        {val}%
+                      </text>
                     </g>
                   );
                 })}
@@ -345,7 +201,7 @@ export default function Dashboard({
             </p>
             <div className="space-y-3.5">
               {(() => {
-                const chapters = Array.from(new Set(documents.flatMap(d => d.chunks.map(c => c.chapter)))).slice(0, 3);
+                const chapters = Array.from(new Set(documents.flatMap((d) => d.chunks.map((c) => c.chapter)))).slice(0, 3);
                 if (chapters.length === 0) {
                   return (
                     <div className="text-center py-6 text-on-surface-variant text-xs border border-dashed border-outline-variant rounded-xl">
@@ -361,7 +217,10 @@ export default function Dashboard({
                     <div key={idx} className="space-y-1.5">
                       <div className="flex justify-between items-center text-xs">
                         <span className="font-medium text-on-surface truncate max-w-[70%]">{chapterName}</span>
-                        <span className="md-chip text-[10px]">{label}{pct !== null ? ` (${pct}%)` : ""}</span>
+                        <span className="md-chip text-[10px]">
+                          {label}
+                          {pct !== null ? ` (${pct}%)` : ""}
+                        </span>
                       </div>
                       <div className="w-full bg-surface-container-high rounded-full h-1">
                         <div className={`${barColor} h-1 rounded-full`} style={{ width: `${pct || 0}%` }} />
@@ -385,9 +244,7 @@ export default function Dashboard({
             <h2 className="text-lg font-semibold text-on-surface flex items-center gap-2">
               <FileText className="w-5 h-5 text-primary" /> Base de connaissances
             </h2>
-            <p className="text-sm text-on-surface-variant">
-              Documents indexés et analysés par l'IA pour ce cours.
-            </p>
+            <p className="text-sm text-on-surface-variant">Documents indexés et analysés par l&apos;IA pour ce cours.</p>
           </div>
         </div>
 
@@ -396,26 +253,29 @@ export default function Dashboard({
             <BookOpen className="w-12 h-12 opacity-40 mb-3" />
             <h3 className="font-medium text-on-surface text-sm">Base de connaissances vide</h3>
             <p className="text-sm text-center max-w-sm mt-1 mb-5">
-              Ouvrez l'espace de travail pour importer vos PDF, présentations ou notes.
+              Ouvrez l&apos;espace de travail pour importer vos PDF, présentations ou notes.
             </p>
-            <button onClick={onEnterWorkspace} disabled={courses.length === 0} className="md-btn-filled text-sm disabled:opacity-50">
-              Ouvrir l'espace de travail
-            </button>
+            <Link href={`/workspace/${course.id}?ingest=1`} className="md-btn-filled text-sm">
+              Importer un document
+            </Link>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <div className="grid grid-cols-12 text-left text-xs text-on-surface-variant uppercase tracking-wider pb-3 font-semibold px-4">
               <span className="col-span-4">Document</span>
-              <span className="col-span-3">Date d'import</span>
+              <span className="col-span-3">Date d&apos;import</span>
               <span className="col-span-2">Taille</span>
               <span className="col-span-2">Segments</span>
               <span className="col-span-1 text-right">Actif</span>
             </div>
             <div className="divide-y divide-outline-variant">
               {documents.map((doc) => (
-                <div 
-                  key={doc.id} 
-                  onClick={() => { onSelectDoc(doc.id); onEnterWorkspace(); }}
+                <div
+                  key={doc.id}
+                  onClick={() => {
+                    onSelectDoc(doc.id);
+                    router.push(`/workspace/${course.id}`);
+                  }}
                   className={`grid grid-cols-12 px-4 py-3.5 items-center rounded-xl cursor-pointer transition-all ${
                     activeDocId === doc.id ? "bg-primary-container/30 border border-primary/20" : "hover:bg-surface-container"
                   }`}
@@ -425,14 +285,21 @@ export default function Dashboard({
                     <span className="font-medium text-on-surface text-sm truncate">{doc.name}</span>
                   </div>
                   <div className="col-span-3 text-xs text-on-surface-variant">
-                    {new Date(doc.uploadDate).toLocaleDateString("fr-FR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    {new Date(doc.uploadDate).toLocaleDateString("fr-FR", {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                   </div>
                   <div className="col-span-2 text-xs text-on-surface-variant">{Math.round(doc.size / 1024)} Ko</div>
                   <div className="col-span-2">
                     <span className="md-chip text-[11px]">{doc.chunks.length} chapitres</span>
                   </div>
                   <div className="col-span-1 text-right">
-                    <span className={`inline-block w-2.5 h-2.5 rounded-full ${activeDocId === doc.id ? "bg-primary" : "bg-outline-variant"}`} />
+                    <span
+                      className={`inline-block w-2.5 h-2.5 rounded-full ${activeDocId === doc.id ? "bg-primary" : "bg-outline-variant"}`}
+                    />
                   </div>
                 </div>
               ))}

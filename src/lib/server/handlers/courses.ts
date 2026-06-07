@@ -31,7 +31,7 @@ export async function handleCreateCourse(req: NextRequest) {
     return errorResponse("Le titre du cours est requis.");
   }
 
-  const userData = getUserData(req);
+  const userData = await getUserData(req);
   syncActiveCourse(userData);
 
   const newCourse = {
@@ -55,7 +55,7 @@ export async function handleCreateCourse(req: NextRequest) {
   userData.completedLessons = newCourse.completedLessons;
   userData.quizHistory = newCourse.quizHistory;
 
-  writeUserData(req, userData);
+  await writeUserData(req, userData);
   return jsonResponse({ success: true, db: userData });
 }
 
@@ -65,7 +65,7 @@ export async function handleSelectCourse(req: NextRequest) {
     return errorResponse("L'ID du cours est requis.");
   }
 
-  const userData = getUserData(req);
+  const userData = await getUserData(req);
   syncActiveCourse(userData);
 
   const targetCourse = (userData.courses as { id: string }[] | undefined)?.find(
@@ -87,7 +87,7 @@ export async function handleSelectCourse(req: NextRequest) {
   userData.completedLessons = targetCourse.completedLessons || [];
   userData.quizHistory = targetCourse.quizHistory || [];
 
-  writeUserData(req, userData);
+  await writeUserData(req, userData);
   return jsonResponse({ success: true, db: userData });
 }
 
@@ -97,7 +97,7 @@ export async function handleDeleteCourse(req: NextRequest) {
     return errorResponse("L'ID du cours est requis.");
   }
 
-  const userData = getUserData(req);
+  const userData = await getUserData(req);
   if (!userData.courses) userData.courses = [];
 
   userData.courses = (userData.courses as { id: string }[]).filter((c) => c.id !== courseId);
@@ -127,6 +127,6 @@ export async function handleDeleteCourse(req: NextRequest) {
     }
   }
 
-  writeUserData(req, userData);
+  await writeUserData(req, userData);
   return jsonResponse({ success: true, db: userData });
 }

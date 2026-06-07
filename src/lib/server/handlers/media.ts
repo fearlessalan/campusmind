@@ -6,7 +6,7 @@ import { LANG_FR } from "../lang";
 import { errorResponse, jsonResponse } from "../response";
 
 export async function handlePodcastScript(req: NextRequest) {
-  const db = getUserData(req);
+  const db = await getUserData(req);
   const allChunks = (db.documents as { chunks: unknown[] }[]).flatMap((d) => d.chunks);
 
   if (allChunks.length === 0) {
@@ -60,7 +60,7 @@ Réponds en JSON avec title et segments (speaker, text). Textes en français.${L
 }
 
 export async function handleAudiobookStructure(req: NextRequest) {
-  const db = getUserData(req);
+  const db = await getUserData(req);
   const allChunks = (db.documents as { chunks: unknown[] }[]).flatMap((d) => d.chunks);
 
   if (allChunks.length === 0) {

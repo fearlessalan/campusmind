@@ -6,7 +6,7 @@ import { LANG_FR } from "../lang";
 import { errorResponse, jsonResponse } from "../response";
 
 export async function handleDiagnosticQuiz(req: NextRequest) {
-  const db = getUserData(req);
+  const db = await getUserData(req);
   const allChunks = (db.documents as { chunks: { chapter: string; content: string }[] }[]).flatMap(
     (d) => d.chunks
   );
@@ -74,7 +74,7 @@ ${sourceConcepts.slice(0, 8000)}${LANG_FR}`;
 
 export async function handleEvaluateAndCurriculum(req: NextRequest) {
   const { answers, quizData } = await req.json();
-  const db = getUserData(req);
+  const db = await getUserData(req);
   const allChunks = (db.documents as { chunks: unknown[] }[]).flatMap((d) => d.chunks);
 
   try {
@@ -145,7 +145,7 @@ Réponds en JSON valide avec evaluation et learningPath.${LANG_FR}`;
       score: result.evaluation.mastery_score,
     });
 
-    writeUserData(req, db);
+    await writeUserData(req, db);
 
     return jsonResponse({
       success: true,
@@ -163,7 +163,7 @@ Réponds en JSON valide avec evaluation et learningPath.${LANG_FR}`;
 
 export async function handleSaveCurriculum(req: NextRequest) {
   const { evaluation, learningPath } = await req.json();
-  const db = getUserData(req);
+  const db = await getUserData(req);
   if (!evaluation || !learningPath) {
     return errorResponse("Données d'évaluation manquantes.");
   }
@@ -178,12 +178,12 @@ export async function handleSaveCurriculum(req: NextRequest) {
     type: "Diagnostic initial",
     score: evaluation.mastery_score,
   });
-  writeUserData(req, db);
+  await writeUserData(req, db);
   return jsonResponse({ success: true, evaluation, learningPath, dbState: db });
 }
 
 export async function handleReinforcementScheduled(req: NextRequest) {
-  const db = getUserData(req);
+  const db = await getUserData(req);
   const allChunks = (db.documents as { chunks: unknown[] }[]).flatMap((d) => d.chunks);
 
   if (allChunks.length === 0) {

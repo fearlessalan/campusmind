@@ -6,7 +6,7 @@ import { LANG_FR } from "../lang";
 import { errorResponse, jsonResponse } from "../response";
 
 export async function handleGetLesson(req: NextRequest, moduleId: string) {
-  const db = getUserData(req);
+  const db = await getUserData(req);
   const targetModule = (db.learningPath as { id: string }[]).find((m) => m.id === moduleId);
 
   if (!targetModule) {
@@ -75,7 +75,7 @@ ${JSON.stringify(allChunks.slice(0, 15))}${LANG_FR}`;
 }
 
 export async function handleCompleteModule(req: NextRequest, moduleId: string) {
-  const db = getUserData(req);
+  const db = await getUserData(req);
 
   let found = false;
   db.learningPath = (db.learningPath as { id: string; isCompleted?: boolean }[]).map((m) => {
@@ -99,12 +99,12 @@ export async function handleCompleteModule(req: NextRequest, moduleId: string) {
   db.performance.retention = Math.min(100, db.performance.retention + 8);
   db.performance.exam_readiness = Math.min(100, db.performance.exam_readiness + 6);
 
-  writeUserData(req, db);
+  await writeUserData(req, db);
   return jsonResponse({ success: true, db });
 }
 
 export async function handleGetQuiz(req: NextRequest, moduleId: string) {
-  const db = getUserData(req);
+  const db = await getUserData(req);
   const targetModule = (db.learningPath as { id: string }[]).find((m) => m.id === moduleId);
 
   if (!targetModule) {
@@ -166,7 +166,7 @@ ${JSON.stringify(allChunks.slice(0, 15))}${LANG_FR}`;
 
 export async function handleRecordScore(req: NextRequest) {
   const { moduleTitle, score } = await req.json();
-  const db = getUserData(req);
+  const db = await getUserData(req);
 
   db.quizHistory.push({
     date: new Date().toISOString().slice(0, 10),
@@ -181,6 +181,6 @@ export async function handleRecordScore(req: NextRequest) {
     Math.round(db.performance.exam_readiness + score / 20)
   );
 
-  writeUserData(req, db);
+  await writeUserData(req, db);
   return jsonResponse({ success: true, db });
 }

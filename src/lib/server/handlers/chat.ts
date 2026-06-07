@@ -6,7 +6,7 @@ import { errorResponse, jsonResponse } from "../response";
 
 export async function handleChat(req: NextRequest) {
   const { messages, selectedDocId } = await req.json();
-  const db = getUserData(req);
+  const db = await getUserData(req);
 
   try {
     const ai = getGemini();

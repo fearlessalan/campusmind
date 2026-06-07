@@ -1,7 +1,18 @@
-import CampusMindApp from "@/components/CampusMindApp";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import LoadingScreen from "@/components/LoadingScreen";
+import { useAuth } from "@/context/AuthContext";
 
 export default function HomePage() {
-  return <CampusMindApp />;
+  const { user, authReady } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!authReady) return;
+    router.replace(user ? "/dashboard" : "/login");
+  }, [authReady, user, router]);
+
+  return <LoadingScreen />;
 }
