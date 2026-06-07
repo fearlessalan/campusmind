@@ -154,13 +154,14 @@
               }
             ],
             "performance": {
-              "progress": 70,
-              "retention": 60,
-              "exam_readiness": 70,
+              "progress": 71,
+              "retention": 61,
+              "exam_readiness": 71,
               "scoreHistory": [
                 3,
                 77,
-                70
+                70,
+                71
               ]
             },
             "learningPath": [],
@@ -320,13 +321,14 @@
           }
         ],
         "performance": {
-          "progress": 70,
-          "retention": 60,
-          "exam_readiness": 70,
+          "progress": 71,
+          "retention": 61,
+          "exam_readiness": 71,
           "scoreHistory": [
             3,
             77,
-            70
+            70,
+            71
           ]
         },
         "learningPath": [],
@@ -339,9 +341,167 @@
           }
         ]
       }
+    },
+    "uwezoalain85@gmail.com": {
+      "passwordHash": "",
+      "data": {
+        "courses": [
+          {
+            "id": "course-1780844934501",
+            "title": "Fibonacci curse",
+            "description": "",
+            "createdAt": "2026-06-07T15:08:54.502Z",
+            "documents": [],
+            "performance": {
+              "progress": 0,
+              "retention": 1,
+              "exam_readiness": 2,
+              "scoreHistory": [
+                2
+              ]
+            },
+            "learningPath": [],
+            "completedLessons": [],
+            "quizHistory": [
+              {
+                "date": "2026-06-07",
+                "type": "Simulateur : Examen sur la Synthèse de l'article 'An Insight in the Beauty of the Fibonacci'",
+                "score": 2
+              }
+            ]
+          }
+        ],
+        "activeCourseId": "course-1780844934501",
+        "documents": [],
+        "performance": {
+          "progress": 0,
+          "retention": 1,
+          "exam_readiness": 2,
+          "scoreHistory": [
+            2
+          ]
+        },
+        "learningPath": [],
+        "completedLessons": [],
+        "quizHistory": [
+          {
+            "date": "2026-06-07",
+            "type": "Simulateur : Examen sur la Synthèse de l'article 'An Insight in the Beauty of the Fibonacci'",
+            "score": 2
+          }
+        ]
+      }
     }
   },
-  "documents": [],
+  "documents": [
+    {
+      "id": "doc-1780844991915",
+      "name": "A_Synthesis_of___An_Insight_in_the_Beauty_of_the_Fibonacci__.pdf",
+      "contentType": "application/pdf",
+      "size": 586942,
+      "uploadDate": "2026-06-07T15:09:51.915Z",
+      "chunks": [
+        {
+          "id": "chunk-ai-1780844991915-0",
+          "source": "A_Synthesis_of___An_Insight_in_the_Beauty_of_the_Fibonacci__.pdf",
+          "page": "Page 1",
+          "chapter": "Page de couverture",
+          "content": "RÉPUBLIQUE DÉMOCRATIQUE DU CONGO\nENSEIGNEMENT SUPÉRIEUR ET UNIVERSITAIRE\nINSTITUT SUPÉRIEUR PÉDAGOGIQUE DE BUKAVU\n\nSCIENTIA SPLENDET ET CONSCIENTIA\n\nSection des Sciences Exactes\nDépartement de Mathématique\n\nTRAVAIL PRATIQUE 1\nInformatique appliquée à la recherche\nSynthèse de l'article : “An Insight in the Beauty of the Fibonacci”\n\nPrésenté par : SIFA GOMENESSE Roseline\nOption : Master à la carte\n\nAnnée Académique : 2025 - 2026"
+        },
+        {
+          "id": "chunk-ai-1780844991915-1",
+          "source": "A_Synthesis_of___An_Insight_in_the_Beauty_of_the_Fibonacci__.pdf",
+          "page": "Page 2",
+          "chapter": "Titre et Auteurs",
+          "content": "A Synthesis of \"An Insight in the Beauty of the Fibonacci\"\nSIFA GOMENESE Roseline\nJune 7, 2026"
+        },
+        {
+          "id": "chunk-ai-1780844991915-2",
+          "source": "A_Synthesis_of___An_Insight_in_the_Beauty_of_the_Fibonacci__.pdf",
+          "page": "Page 2",
+          "chapter": "Résumé",
+          "content": "Abstract\nThis report presents a synthesis of the article An Insight in the Beauty of the Fibonacci written by Adhikari and Kattel (2023). The article provides an overview of Fibonacci numbers, their relationship with the Golden Ratio, their mathematical properties, and their applications in nature, art and science. The goal of this report is to summarize the main ideas presented by the authors while highlighting some of the most important mathematical results."
+        },
+        {
+          "id": "chunk-ai-1780844991915-3",
+          "source": "A_Synthesis_of___An_Insight_in_the_Beauty_of_the_Fibonacci__.pdf",
+          "page": "Page 2",
+          "chapter": "1. Introduction",
+          "content": "The article by Adhikari and Kattel presents a panoramic view of Fibonacci numbers and their beauty in mathematics and nature [1].\nThe authors emphasize that mathematics is present in many aspects of everyday life and that Fibonacci numbers constitute one of the most remarkable numerical patterns found in nature.\nThe paper discusses:\n• the historical origin of Fibonacci numbers;\n• the Golden Ratio;\n• mathematical properties of the sequence;\n• applications in nature and art."
+        },
+        {
+          "id": "chunk-ai-1780844991915-4",
+          "source": "A_Synthesis_of___An_Insight_in_the_Beauty_of_the_Fibonacci__.pdf",
+          "page": "Page 2",
+          "chapter": "2. Préliminaires",
+          "content": "The Fibonacci sequence is defined by\nFn = Fn-1+ Fn-2, n ≥ 2 (1)\nwith initial conditions\nF0 = 0,\nF1 = 1.\nThe first terms are:\n0, 1, 1, 2, 3, 5, 8, 13, 21, 34, ...\nThe article also introduces the Golden Ratio\nφ = (1 + √5)/2 ≈ 1.6180339887. (2)\nThe authors explain that the ratio of consecutive Fibonacci numbers approaches φ as n becomes large."
+        },
+        {
+          "id": "chunk-ai-1780844991915-5",
+          "source": "A_Synthesis_of___An_Insight_in_the_Beauty_of_the_Fibonacci__.pdf",
+          "page": "Page 3",
+          "chapter": "3. Résultats",
+          "content": "One of the main observations discussed in the article is the convergence of the ratio Fn+1/Fn towards the Golden Ratio.\nTable 1 illustrates this phenomenon, showing how the ratio Fn+1/Fn approaches the Golden Ratio as n increases, with examples from n=5 (ratio 1.6000) to n=10 (ratio 1.6182)."
+        },
+        {
+          "id": "chunk-ai-1780844991915-6",
+          "source": "A_Synthesis_of___An_Insight_in_the_Beauty_of_the_Fibonacci__.pdf",
+          "page": "Page 3",
+          "chapter": "Propriétés Mathématiques et Formule de Binet",
+          "content": "The authors also discuss several mathematical properties of Fibonacci numbers, including their connection with Pascal's triangle and Binet's formula:\nFn = (1/√5) * (((1+√5)/2)^n - ((1-√5)/2)^n). (3)"
+        },
+        {
+          "id": "chunk-ai-1780844991915-7",
+          "source": "A_Synthesis_of___An_Insight_in_the_Beauty_of_the_Fibonacci__.pdf",
+          "page": "Page 3",
+          "chapter": "3.1. Nombres de Fibonacci dans la Nature",
+          "content": "According to the article, Fibonacci numbers appear in many natural phenomena. Examples include:\n• sunflower seed arrangements;\n• pine cones;\n• leaf arrangements (phyllotaxis);\n• honeybee genealogy."
+        },
+        {
+          "id": "chunk-ai-1780844991915-8",
+          "source": "A_Synthesis_of___An_Insight_in_the_Beauty_of_the_Fibonacci__.pdf",
+          "page": "Page 3",
+          "chapter": "3.1. Nombres de Fibonacci dans la Nature",
+          "content": "Besides the examples listed above, one of the most striking visual manifestations of the Fibonacci sequence in nature is found in the floral world. As illustrated in Figure 1, the number of petals on various flowers frequently aligns with the Fibonacci sequence. Starting from the left, we can observe flowers exhibiting 3, 5, 8, 13, and 21 petals. These numbers correspond exactly to the terms F4 through F8 of the sequence. (Source: [2])"
+        },
+        {
+          "id": "chunk-ai-1780844991915-9",
+          "source": "A_Synthesis_of___An_Insight_in_the_Beauty_of_the_Fibonacci__.pdf",
+          "page": "Page 4",
+          "chapter": "3.2. Carrelage de Fibonacci",
+          "content": "The article also highlights the geometric interpretation of Fibonacci numbers through squares whose side lengths follow the Fibonacci sequence. By drawing quarter circles inside these squares, one can form a continuous curve known as the Fibonacci spiral.\nFigure 2 displays an elegant visualization of this process. As the sequence grows, this spiral closely approximates the Golden Spiral, a logarithmic spiral whose growth factor is φ. The Fibonacci sequence is defined by F_n = 0 if n=0, F_n = 1 if n=1, and F_n = F_{n-1} + F_{n-2} if n >= 2. (Source: [3])"
+        },
+        {
+          "id": "chunk-ai-1780844991915-10",
+          "source": "A_Synthesis_of___An_Insight_in_the_Beauty_of_the_Fibonacci__.pdf",
+          "page": "Page 4",
+          "chapter": "4. Conclusion",
+          "content": "The article provides an accessible introduction to Fibonacci numbers and their relationship with the Golden Ratio.\nThe authors show that these mathematical structures are not only important in theoretical mathematics but also appear in nature, art and design.\nOverall, the paper succeeds in presenting a broad and pedagogical overview of one of the most famous sequences in mathematics."
+        },
+        {
+          "id": "chunk-ai-1780844991915-11",
+          "source": "A_Synthesis_of___An_Insight_in_the_Beauty_of_the_Fibonacci__.pdf",
+          "page": "Page 4",
+          "chapter": "Annexe: Identités de Fibonacci",
+          "content": "Some useful Fibonacci identities are:\n1. Σ(i=1 to n) Fi = Fn+2 - 1\n2. Σ(i=1 to n) Fi^2 = FnFn+1"
+        },
+        {
+          "id": "chunk-ai-1780844991915-12",
+          "source": "A_Synthesis_of___An_Insight_in_the_Beauty_of_the_Fibonacci__.pdf",
+          "page": "Page 4",
+          "chapter": "Annexe: Identités de Fibonacci",
+          "content": "3. Fn-1Fn+1 - Fn^2 = (-1)^n"
+        },
+        {
+          "id": "chunk-ai-1780844991915-13",
+          "source": "A_Synthesis_of___An_Insight_in_the_Beauty_of_the_Fibonacci__.pdf",
+          "page": "Page 5",
+          "chapter": "Références",
+          "content": "References\n[1] Iswar Mani Adhikari and Parameshwari Kattel. An insight in the beauty of the fibonacci. Journal of Nepal Mathematical Society, 6(1):26-33, Aug. 2023.\n[2] Let's Talk Science. The mathematical beauty of nature. https://letstalkscience.ca/educational-resources/backgrounders/fibonacci-and-golden-ratio. Image of flowers illustrating the Fibonacci sequence.\n[3] Andrew Mertz. Fibonacci spiral in TikZ. https://texample.net/fibonacci-spiral/. Accessed: 2023."
+        }
+      ]
+    }
+  ],
   "performance": {
     "progress": 0,
     "retention": 0,
