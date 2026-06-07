@@ -1,3 +1,5 @@
+"use client";
+
 export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const token = localStorage.getItem("campusmind_token");
   const finalInit: RequestInit = init ? { ...init } : {};

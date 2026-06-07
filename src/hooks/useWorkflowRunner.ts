@@ -1,3 +1,5 @@
+"use client";
+
 import { useCallback, useRef, useState } from "react";
 import { apiFetch, parseApiResponse } from "../lib/api";
 import { executeWorkflowStep, WORKFLOW_STEPS_TEMPLATE } from "../lib/campusAi";

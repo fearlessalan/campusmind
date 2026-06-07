@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect } from "react";
 import { 
   Sparkles,
@@ -6,15 +8,15 @@ import {
   LogOut
 } from "lucide-react";
 
-import NotebookWorkspace from "./components/NotebookWorkspace";
-import Dashboard from "./components/Dashboard";
-import { AcademicDocument, PerformanceStats, LearningModule, Course } from "./types";
-import { auth, googleProvider, signInWithPopup, signOut } from "./firebase";
+import NotebookWorkspace from "./NotebookWorkspace";
+import Dashboard from "./Dashboard";
+import { AcademicDocument, PerformanceStats, LearningModule, Course } from "@/types";
+import { auth, googleProvider, signInWithPopup, signOut } from "@/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { apiFetch } from "./lib/api";
-import { useModal } from "./context/ModalContext";
+import { apiFetch } from "@/lib/api";
+import { useModal } from "@/context/ModalContext";
 
-export default function App() {
+export default function CampusMindApp() {
   const { showAlert, showConfirm } = useModal();
   const [activeView, setActiveView] = useState<"dashboard" | "workspace">("dashboard");
   const [workspaceInitialModal, setWorkspaceInitialModal] = useState<"ingest" | null>(null);
