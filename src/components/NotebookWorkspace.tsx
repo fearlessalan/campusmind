@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { AcademicDocument, AudiobookChapter, DocumentChunk, LearningModule, PerformanceStats, PodcastScript } from "../types";
 import { apiFetch } from "../lib/api";
+import { generateChatResponse } from "../lib/campusAi";
 import { useModal } from "../context/ModalContext";
 import { useWorkflowRunner } from "../hooks/useWorkflowRunner";
 import IngestionHub from "./IngestionHub";
@@ -194,20 +195,17 @@ export default function NotebookWorkspace({
     setIsTyping(true);
 
     try {
-      // Find the first checked document as focal context, or none if multiple are scanning
       const selectedDocId = checkedDocIds.length === 1 ? checkedDocIds[0] : (activeDocId || null);
+      const scopedDocs =
+        checkedDocIds.length > 0
+          ? documents.filter((d) => checkedDocIds.includes(d.id))
+          : documents;
 
-      const res = await apiFetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [...messages, userMsg],
-          selectedDocId
-        })
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Échec de la requête de chat");
+      const data = await generateChatResponse(
+        scopedDocs,
+        [...messages, userMsg],
+        selectedDocId
+      );
 
       setMessages(prev => [
         ...prev,

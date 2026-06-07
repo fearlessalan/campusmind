@@ -1,8 +1,9 @@
-import { generateJson } from "./firebaseAi";
+import { generateJson, generateText } from "./firebaseAi";
 import {
   AcademicDocument,
   AudiobookChapter,
   DiagnosticQuiz,
+  DocumentChunk,
   ExamGrading,
   ExamSession,
   LearningModule,
@@ -34,6 +35,84 @@ const LANG_FR = "\nRéponds entièrement en français.";
 
 export function getChunks(documents: AcademicDocument[]) {
   return documents.flatMap((d) => d.chunks);
+}
+
+function selectRelevantChunks(
+  allChunks: DocumentChunk[],
+  query: string
+): DocumentChunk[] {
+  const queryWords = query.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+  const matchScores = allChunks.map((chunk) => {
+    let score = 0;
+    const text = `${chunk.content} ${chunk.chapter} ${chunk.source}`.toLowerCase();
+    queryWords.forEach((word) => {
+      if (text.includes(word)) score += 1;
+    });
+    return { chunk, score };
+  });
+
+  const relevant = matchScores
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4)
+    .map((item) => item.chunk);
+
+  return relevant.length > 0 ? relevant : allChunks.slice(0, 3);
+}
+
+export async function generateChatResponse(
+  documents: AcademicDocument[],
+  messages: { role: string; content: string }[],
+  selectedDocId: string | null
+): Promise<{ content: string; citations: DocumentChunk[] }> {
+  let allChunks = getChunks(documents);
+  if (selectedDocId) {
+    const selected = documents.find((d) => d.id === selectedDocId);
+    if (selected) allChunks = selected.chunks;
+  }
+
+  if (allChunks.length === 0) {
+    return {
+      content: "Votre base de connaissances est vide. Importez des documents ou saisissez des notes pour commencer à discuter avec vos cours.",
+      citations: [],
+    };
+  }
+
+  const latestUserMsg = messages[messages.length - 1]?.content || "";
+  const contextChunks = selectRelevantChunks(allChunks, latestUserMsg);
+
+  const contextPrompt = contextChunks
+    .map(
+      (c, idx) => `[Source #${idx + 1}]
+File: ${c.source}
+Chapter: ${c.chapter}
+Location: ${c.page}
+Content: ${c.content}`
+    )
+    .join("\n");
+
+  const chatPrompt = `Tu es CampusMind, un conseiller académique IA expert.
+Réponds à la question de l'étudiant en t'appuyant UNIQUEMENT sur les sources ci-dessous.
+
+Consignes :
+- Explique les concepts complexes avec clarté et pédagogie.
+- Chaque affirmation importante doit citer sa source : (Source : [Fichier] [Emplacement]).
+- Ne fabrique pas de faits externes.
+- Formate ta réponse en Markdown.
+
+Sources :
+${contextPrompt}
+
+Historique :
+${messages.slice(-5).map((m) => `${m.role === "user" ? "Étudiant" : "CampusMind"}: ${m.content}`).join("\n")}
+Étudiant : ${latestUserMsg}
+CampusMind :${LANG_FR}`;
+
+  const content = await generateText(chatPrompt);
+  return {
+    content: content || "Je n'ai pas pu traiter cette question. Pouvez-vous la reformuler ?",
+    citations: contextChunks,
+  };
 }
 
 const MAX_CHAPTER_CHARS = 2500;
