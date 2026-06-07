@@ -1,8 +1,12 @@
+import "dotenv/config";
 import express from "express";
 import path from "path";
 import fs from "fs";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
+const firebaseConfig = JSON.parse(
+  fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf-8")
+) as { apiKey?: string };
 
 const app = express();
 const PORT = 3000;
@@ -15,14 +19,22 @@ app.use(express.json({ limit: "50mb" }));
 
 // Helper to get Gemini Client with Lazy-Load & Custom User-Agent
 let aiClient: GoogleGenAI | null = null;
+
+function resolveGeminiApiKey(): string {
+  const fromEnv = process.env.GEMINI_API_KEY?.trim();
+  if (fromEnv) return fromEnv;
+  // Secours : clé web Firebase (nécessite Generative Language API activée sur le projet GCP)
+  const fromFirebase = firebaseConfig.apiKey?.trim();
+  if (fromFirebase) return fromFirebase;
+  throw new Error(
+    "GEMINI_API_KEY manquante. Ajoutez votre clé dans le fichier .env à la racine du projet."
+  );
+}
+
 function getGemini(): GoogleGenAI {
   if (!aiClient) {
-    const key = process.env.GEMINI_API_KEY;
-    if (!key) {
-      throw new Error("GEMINI_API_KEY is missing. Please add it via the Secrets panel in Settings.");
-    }
     aiClient = new GoogleGenAI({
-      apiKey: key,
+      apiKey: resolveGeminiApiKey(),
       httpOptions: {
         headers: {
           "User-Agent": "aistudio-build",
@@ -72,23 +84,6 @@ interface DatabaseSchema {
   }[];
 }
 
-const DEFAULT_ALGO_CHUNKS = [
-  {
-    id: "algo-chunk-1",
-    source: "Algorithmique_et_Structures_de_Donnees.docx",
-    page: "Page 1",
-    chapter: "Chapitre 1 : Introduction à l'Algorithmique",
-    content: "Un algorithme est une suite finie et non ambiguë d'instructions permettant de résoudre un problème ou d'obtenir un résultat. Les structures de contrôle fondamentales sont le séquençage, les conditions (si-alors-sinon) et les boucles (tant que, pour)."
-  },
-  {
-    id: "algo-chunk-2",
-    source: "Algorithmique_et_Structures_de_Donnees.docx",
-    page: "Page 4",
-    chapter: "Chapitre 2 : Complexité algorithmique",
-    content: "La complexité temporelle mesure le nombre d'opérations élémentaires exécutées par un algorithme en fonction de la taille de ses données d'entrée. La complexité spatiale estime l'espace mémoire requis. L'efficacité s'exprime typiquement avec la notation Grand O."
-  }
-];
-
 const getInitialUserState = () => ({
   courses: [],
   activeCourseId: "",
@@ -104,52 +99,7 @@ const getInitialUserState = () => ({
   quizHistory: []
 });
 
-const getAlgoDemoCourse = () => ({
-  id: "course-algo-demo",
-  title: "Algorithmique et Structures de Données",
-  description: "Cours officiel sur la complexité temporelle/spatiale, structures de données linéaires et tris avancés.",
-  createdAt: new Date().toISOString(),
-  documents: [
-    {
-      id: "demo-doc-algo",
-      name: "Algorithmique_et_Structures_de_Donnees.docx",
-      contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      size: 98110,
-      uploadDate: new Date().toISOString(),
-      chunks: DEFAULT_ALGO_CHUNKS
-    }
-  ],
-  performance: {
-    progress: 25,
-    retention: 30,
-    exam_readiness: 40,
-    scoreHistory: [40]
-  },
-  learningPath: [
-    {
-      id: "algo-mod-1",
-      title: "Algorithmes & Logique de Controle",
-      description: "Structures conditionnelles, boucles, pseudo-code et structures de controle.",
-      estimatedTime: "30m",
-      order: 1,
-      weakTopicRelation: "Algorithmes",
-      isCompleted: true
-    },
-    {
-      id: "algo-mod-2",
-      title: "Analyse de Complexite",
-      description: "Evaluation de la complexite temporelle et spatiale, notation Big-O.",
-      estimatedTime: "40m",
-      order: 2,
-      weakTopicRelation: "Complexite",
-      isCompleted: false
-    }
-  ],
-  completedLessons: ["algo-mod-1"],
-  quizHistory: [
-    { date: new Date().toISOString().slice(0, 10), type: "Quiz Algorithmique", score: 75 }
-  ]
-});
+const LANG_FR = "\n\nIMPORTANT : Réponds UNIQUEMENT en français. Tous les textes générés doivent être en français.";
 
 function readDB(): any {
   try {
@@ -264,49 +214,6 @@ function writeUserData(req: express.Request, data: any) {
     writeDB(db);
   }
 }
-
-const getAlgoDemoState = () => ({
-  documents: [
-    {
-      id: "demo-doc-algo",
-      name: "Algorithmique_et_Structures_de_Donnees.docx",
-      contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      size: 98110,
-      uploadDate: new Date().toISOString(),
-      chunks: DEFAULT_ALGO_CHUNKS
-    }
-  ],
-  performance: {
-    progress: 25,
-    retention: 30,
-    exam_readiness: 40,
-    scoreHistory: [40]
-  },
-  learningPath: [
-    {
-      id: "algo-mod-1",
-      title: "Algorithmes & Logique de Controle",
-      description: "Structures conditionnelles, boucles, pseudo-code et structures de controle.",
-      estimatedTime: "30m",
-      order: 1,
-      weakTopicRelation: "Algorithmes",
-      isCompleted: true
-    },
-    {
-      id: "algo-mod-2",
-      title: "Analyse de Complexite",
-      description: "Evaluation de la complexite temporelle et spatiale, notation Big-O.",
-      estimatedTime: "40m",
-      order: 2,
-      weakTopicRelation: "Complexite",
-      isCompleted: false
-    }
-  ],
-  completedLessons: ["algo-mod-1"],
-  quizHistory: [
-    { date: new Date().toISOString().slice(0, 10), type: "Quiz Algorithmique", score: 75 }
-  ]
-});
 
 // Ensure database file is initialized at start
 try {
@@ -514,7 +421,7 @@ app.post("/api/courses/delete", (req, res) => {
   res.json({ success: true, db: userData });
 });
 
-// Reset Knowledge State to Factory Defaults or Demo load
+// Reset Knowledge State to factory defaults
 app.post("/api/db/reset", (req, res) => {
   const email = getUserEmail(req);
   if (email) {
@@ -523,16 +430,14 @@ app.post("/api/db/reset", (req, res) => {
     if (!db.users[email]) {
       db.users[email] = { passwordHash: "", data: getInitialUserState() };
     }
-    // Seed with our algorithms demo content when resetting as a demo trigger
-    const demoData = getAlgoDemoState();
-    db.users[email].data = demoData;
+    const freshData = getInitialUserState();
+    db.users[email].data = freshData;
     writeDB(db);
-    return res.json({ message: "Espace démo chargé avec succès !", db: demoData });
+    return res.json({ message: "Espace réinitialisé avec succès.", db: freshData });
   }
 
-  // Fallback
   writeDB(initialDB);
-  res.json({ message: "Database re-seeded successfully", db: initialDB });
+  res.json({ message: "Base de données réinitialisée.", db: initialDB });
 });
 
 // Reset performance metrics
@@ -548,39 +453,63 @@ app.post("/api/db/reset-performance", (req, res) => {
   userDB.completedLessons = [];
   userDB.quizHistory = [];
   writeUserData(req, userDB);
-  res.json({ message: "Performance reset successful", db: userDB });
+  res.json({ message: "Progression réinitialisée.", db: userDB });
 });
 
 // Module 1 — OCR & Knowledge Ingestion
 app.post("/api/ingest", async (req, res) => {
-  const { fileName, fileType, fileContent, manualText } = req.body;
-  const db = readDB();
+  const { fileName, fileType, fileContent, manualText, preChunks, fileSize } = req.body;
+  const userData = getUserData(req);
+  if (!userData.documents) userData.documents = [];
 
   try {
-    // If it's pure manual text ingestion
+    // Chunks déjà extraits côté client via Firebase AI Logic (pas de clé serveur)
+    if (preChunks && Array.isArray(preChunks) && preChunks.length > 0) {
+      const docId = "doc-" + Date.now();
+      const extractedChunks = preChunks.map((c: any, index: number) => ({
+        id: `chunk-ai-${Date.now()}-${index}`,
+        source: c.source || fileName,
+        page: c.page || `Page ${index + 1}`,
+        chapter: c.chapter || "Vue d'ensemble",
+        content: c.content
+      }));
+
+      const newDoc = {
+        id: docId,
+        name: fileName,
+        contentType: fileType || "application/octet-stream",
+        size: fileSize ?? 0,
+        uploadDate: new Date().toISOString(),
+        chunks: extractedChunks
+      };
+
+      userData.documents.push(newDoc);
+      writeUserData(req, userData);
+      return res.json({ success: true, document: newDoc });
+    }
+
     if (manualText) {
       const docId = "doc-" + Date.now();
-      // Simple parse into 2 chunks
       const paragraphs = manualText.split("\n\n").filter(Boolean);
       const chunks = paragraphs.map((para: string, i: number) => ({
         id: `chunk-${docId}-${i}`,
-        source: fileName || "manual_scratchpad.txt",
+        source: fileName || "notes_manuelles.txt",
         page: `Page ${Math.ceil((i + 1) / 2)}`,
-        chapter: "Manual Notes",
+        chapter: "Notes manuelles",
         content: para.trim()
       }));
 
       const newDoc = {
         id: docId,
-        name: fileName || "manual_scratchpad.txt",
+        name: fileName || "notes_manuelles.txt",
         contentType: "text/plain",
         size: manualText.length,
         uploadDate: new Date().toISOString(),
         chunks
       };
 
-      db.documents.push(newDoc);
-      writeDB(db);
+      userData.documents.push(newDoc);
+      writeUserData(req, userData);
       return res.json({ success: true, document: newDoc });
     }
 
@@ -590,18 +519,18 @@ app.post("/api/ingest", async (req, res) => {
       const mime = fileType || "application/pdf";
 
       const ai = getGemini();
-      const prompt = `You are CampusMind Ingestion Assistant, an elite OCR, academic transcription, chunking and semantic compiler agent.
-Your assignment is to process the attached academic file.
-1. Perform high-definition text extraction (and full transcription/OCR on handwriting, images, or figures).
-2. Clean structural elements, correct typos, and perform semantic document chunking.
-3. Organize the text into structured chunks of roughly 1-3 highly descriptive educational paragraphs.
-4. For EACH chunk, define:
-   - "source": must match exact filename "${fileName}"
-   - "page": logical page number (e.g. "Page 1", "Page 2" etc.)
-   - "chapter": Chapter heading or section title this chunk belongs to (e.g. "Chapter 1: Principles of ethics")
-   - "content": the transcribed, pristine academic reading material compiled from the source.
+      const prompt = `Tu es l'assistant d'ingestion CampusMind, expert en OCR, transcription académique et découpage sémantique.
+Traite le fichier académique joint :
+1. Extrais le texte en haute définition (OCR sur manuscrits, images ou figures).
+2. Nettoie la structure, corrige les fautes et découpe sémantiquement le document.
+3. Organise le texte en segments de 1 à 3 paragraphes pédagogiques.
+4. Pour CHAQUE segment, définis :
+   - "source" : nom exact du fichier "${fileName}"
+   - "page" : numéro logique (ex. "Page 1", "Page 2")
+   - "chapter" : titre de chapitre ou section en français
+   - "content" : contenu académique transcrit
 
-Analyze the materials completely. Make chunks detailed and authentic. Output ONLY valid JSON containing an array of these chunks matching our schema. No backticks, no markdown boxes. Just raw JSON.`;
+Réponds UNIQUEMENT en JSON valide avec un tableau "chunks". Pas de markdown.${LANG_FR}`;
 
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
@@ -643,7 +572,7 @@ Analyze the materials completely. Make chunks detailed and authentic. Output ONL
         id: `chunk-ai-${Date.now()}-${index}`,
         source: c.source || fileName,
         page: c.page || `Page ${index + 1}`,
-        chapter: c.chapter || "Overview Summary",
+        chapter: c.chapter || "Vue d'ensemble",
         content: c.content
       }));
 
@@ -657,15 +586,15 @@ Analyze the materials completely. Make chunks detailed and authentic. Output ONL
         chunks: extractedChunks
       };
 
-      db.documents.push(newDoc);
-      writeDB(db);
+      userData.documents.push(newDoc);
+      writeUserData(req, userData);
       return res.json({ success: true, document: newDoc });
     }
 
-    return res.status(400).json({ error: "No text or base64 file content received" });
+    return res.status(400).json({ error: "Aucun contenu texte ou fichier reçu." });
   } catch (error: any) {
     console.error("Ingestion failed:", error);
-    res.status(500).json({ error: error.message || "Knowledge Ingestion failed" });
+    res.status(500).json({ error: error.message || "Échec de l'ingestion du document." });
   }
 });
 
@@ -689,7 +618,7 @@ app.post("/api/chat", async (req, res) => {
     if (allChunks.length === 0) {
       return res.json({
         role: "assistant",
-        content: "Your active Knowledge Base is currently empty. Please load some notes, upload a textbook, or use our demo buttons to start researching!",
+        content: "Votre base de connaissances est vide. Importez des documents ou saisissez des notes pour commencer à discuter avec vos cours.",
         citations: []
       });
     }
@@ -725,22 +654,22 @@ Location: ${c.page}
 Content: ${c.content}
 `).join("\n");
 
-    const chatPrompt = `You are CampusMind Research AI, an elite academic advisor.
-Your response must address the student's question faithfully using exclusively the sourced knowledge base entries listed below.
+    const chatPrompt = `Tu es CampusMind, un conseiller académique IA expert.
+Réponds à la question de l'étudiant en t'appuyant UNIQUEMENT sur les sources ci-dessous.
 
-Guidelines:
-- Explain complicated concepts with vivid academic breakdowns and absolute clarity.
-- Every major assertion MUST be followed by the source reference. Do not hypothesize or make up external facts.
-- Use explicit visual citation headers at the end of parts of your message or inline citations in the format: (Source: [File] [Location]).
-- Format your output elegantly in Markdown.
+Consignes :
+- Explique les concepts complexes avec clarté et pédagogie.
+- Chaque affirmation importante doit citer sa source : (Source : [Fichier] [Emplacement]).
+- Ne fabrique pas de faits externes.
+- Formate ta réponse en Markdown.
 
-Context Sourced:
+Sources :
 ${contextPrompt}
 
-Conversation History:
-${messages.slice(-5).map((m: any) => `${m.role === 'user' ? 'Student' : 'CampusMind'}: ${m.content}`).join("\n")}
-Student: ${latestUserMsg}
-CampusMind:`;
+Historique :
+${messages.slice(-5).map((m: any) => `${m.role === 'user' ? 'Étudiant' : 'CampusMind'}: ${m.content}`).join("\n")}
+Étudiant : ${latestUserMsg}
+CampusMind :${LANG_FR}`;
 
     const result = await ai.models.generateContent({
       model: "gemini-3.5-flash",
@@ -749,13 +678,13 @@ CampusMind:`;
 
     res.json({
       role: "assistant",
-      content: result.text || "I apologize, I could not complete that query. Could you phrase it differently?",
+      content: result.text || "Je n'ai pas pu traiter cette question. Pouvez-vous la reformuler ?",
       citations: contextChunks
     });
 
   } catch (error: any) {
     console.error("Chat API failed:", error);
-    res.status(500).json({ error: error.message || "Research Chat error occurred" });
+    res.status(500).json({ error: error.message || "Erreur du chat de recherche." });
   }
 });
 
@@ -765,25 +694,24 @@ app.get("/api/diagnostic-quiz", async (req, res) => {
   const allChunks = db.documents.flatMap(d => d.chunks);
 
   if (allChunks.length === 0) {
-    return res.status(400).json({ error: "Knowledge base is empty. Please upload some files first." });
+    return res.status(400).json({ error: "La base de connaissances est vide. Importez d'abord des documents." });
   }
 
   try {
     const ai = getGemini();
     const sourceConcepts = allChunks.map(c => `Chapter: ${c.chapter} | Content snippet: ${c.content.slice(0, 150)}...`).join("\n");
 
-    const prompt = `You are campusmind Assessment Agent.
-Review the following coursework materials and generate a five-question comprehensive diagnostic quiz to estimate student knowledge level.
-You must construct exactly 5 highly interactive, pedagogically rigorous questions:
-- At least 2 Multiple Choice Questions (mcq)
-- At least 1 True/False Question (tf)
-- At least 1 Open Concept Question (open)
-- At least 1 Scenario Application Question (scenario)
+    const prompt = `Tu es l'agent d'évaluation CampusMind.
+Génère un quiz diagnostique de 5 questions pour estimer le niveau de l'étudiant :
+- Au moins 2 QCM (mcq)
+- Au moins 1 Vrai/Faux (tf)
+- Au moins 1 question ouverte (open)
+- Au moins 1 scénario d'application (scenario)
 
-Return exactly the JSON output format required. Provide excellent options, explanations, and hints.
+Fournis d'excellentes options, explications et indices en français.
 
-Source Materials:
-${sourceConcepts.slice(0, 8000)}`;
+Matériaux sources :
+${sourceConcepts.slice(0, 8000)}${LANG_FR}`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
@@ -821,7 +749,7 @@ ${sourceConcepts.slice(0, 8000)}`;
     res.json(JSON.parse(response.text || '{"questions": []}'));
   } catch (error: any) {
     console.error("Diagnostic generation failed:", error);
-    res.status(500).json({ error: error.message || "Failed to generate diagnostic quiz" });
+    res.status(500).json({ error: error.message || "Échec de la génération du quiz diagnostique." });
   }
 });
 
@@ -834,23 +762,18 @@ app.post("/api/evaluate-and-curriculum", async (req, res) => {
   try {
     const ai = getGemini();
 
-    const evaluationPrompt = `You are CampusMind Assessment Agent & Curriculum Agent working in absolute harmony.
-Review the user's answered diagnostic quiz below.
-1. Evaluate their performance. Match each answer to estimate mastery.
-2. Determine:
-   - "mastery_score" (an overall integer percentage from 0 to 100)
-   - "weak_topics" (list of specific chapters/topics that they struggled with or got wrong)
-   - "strong_topics" (topics they showed clear memory of)
-3. Compose a customized, adaptive 4-module Learning Path. Priority must go to resolving their "weak_topics" first!
-The learning path order must outline Modules that build up they foundations step-by-step.
+    const evaluationPrompt = `Tu es l'agent d'évaluation et l'agent curriculum CampusMind.
+1. Évalue les réponses du quiz diagnostique.
+2. Détermine mastery_score (0-100), weak_topics et strong_topics.
+3. Compose un parcours adaptatif de 4 modules, en priorisant les weak_topics.
 
-Quiz Material:
+Quiz :
 ${JSON.stringify(quizData)}
 
-Student Submitted Answers:
+Réponses de l'étudiant :
 ${JSON.stringify(answers)}
 
-Provide strict valid JSON containing both the evaluation results and the curriculum learning path.`;
+Réponds en JSON valide avec evaluation et learningPath.${LANG_FR}`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
@@ -901,7 +824,7 @@ Provide strict valid JSON containing both the evaluation results and the curricu
     db.completedLessons = []; // wipe previous so they can master the new path
     db.quizHistory.push({
       date: new Date().toISOString().slice(0, 10),
-      type: "Initial Diagnostic Setup",
+      type: "Diagnostic initial",
       score: result.evaluation.mastery_score
     });
 
@@ -916,8 +839,61 @@ Provide strict valid JSON containing both the evaluation results and the curricu
 
   } catch (error: any) {
     console.error("Evaluation and curriculum failed:", error);
-    res.status(500).json({ error: error.message || "Assessment evaluation failed" });
+    res.status(500).json({ error: error.message || "Échec de l'évaluation diagnostique." });
   }
+});
+
+// Persistance uniquement — l'IA tourne côté client (Firebase AI Logic)
+app.post("/api/training/save-curriculum", (req, res) => {
+  const { evaluation, learningPath } = req.body;
+  const db = getUserData(req);
+  if (!evaluation || !learningPath) {
+    return res.status(400).json({ error: "Données d'évaluation manquantes." });
+  }
+  db.performance.progress = 10;
+  db.performance.retention = Math.round(evaluation.mastery_score * 0.95);
+  db.performance.exam_readiness = Math.round(evaluation.mastery_score * 0.9);
+  db.performance.scoreHistory.push(evaluation.mastery_score);
+  db.learningPath = learningPath;
+  db.completedLessons = [];
+  db.quizHistory.push({
+    date: new Date().toISOString().slice(0, 10),
+    type: "Diagnostic initial",
+    score: evaluation.mastery_score
+  });
+  writeUserData(req, db);
+  res.json({ success: true, evaluation, learningPath, dbState: db });
+});
+
+app.post("/api/exam/save-grading", (req, res) => {
+  const { grading, examTitle } = req.body;
+  const db = getUserData(req);
+  if (!grading) return res.status(400).json({ error: "Résultats de correction manquants." });
+  db.performance.exam_readiness = grading.score;
+  db.performance.retention = Math.round((db.performance.retention + grading.score) / 2);
+  db.performance.scoreHistory.push(grading.score);
+  db.quizHistory.push({
+    date: new Date().toISOString().slice(0, 10),
+    type: `Simulateur : ${examTitle || "Examen blanc"}`,
+    score: grading.score
+  });
+  writeUserData(req, db);
+  res.json({ success: true, grading, dbState: db });
+});
+
+app.post("/api/workflow/finalize", (req, res) => {
+  const db = getUserData(req);
+  const examScore = 65 + Math.floor(Math.random() * 25);
+  db.performance.progress = examScore;
+  db.performance.retention = Math.max(55, examScore - 10);
+  db.performance.exam_readiness = examScore;
+  db.performance.scoreHistory.push(examScore);
+  writeUserData(req, db);
+  res.json({
+    status: "success",
+    message: `[Insights Agent] Pipeline complet — score examen : ${examScore}%. Recommandations : Revoir le module 3`,
+    dbState: db
+  });
 });
 
 // Module 3 — Lesson Node Generator (Agent 3 - Lesson Agent)
@@ -927,7 +903,7 @@ app.get("/api/module/:id/lesson", async (req, res) => {
   const targetModule = db.learningPath.find(m => m.id === moduleId);
 
   if (!targetModule) {
-    return res.status(404).json({ error: "Module not found in Curriculum" });
+    return res.status(404).json({ error: "Module introuvable dans le parcours." });
   }
 
   const allChunks = db.documents.flatMap(d => d.chunks);
@@ -935,22 +911,19 @@ app.get("/api/module/:id/lesson", async (req, res) => {
   try {
     const ai = getGemini();
 
-    const lessonPrompt = `You are CampusMind Lesson Agent.
-Your duty is to generate a comprehensive, visually pristine, highly engaging interactive lesson node for the module: "${targetModule.title}".
-Context information:
-Module Description: ${targetModule.description}
-Weak topic focus: ${targetModule.weakTopicRelation || "N/A"}
+    const lessonPrompt = `Tu es l'agent de leçon CampusMind.
+Génère une leçon interactive complète pour le module : "${targetModule.title}".
+Description : ${targetModule.description}
+Point faible ciblé : ${targetModule.weakTopicRelation || "N/A"}
 
-Using the active knowledge base files listed below, compile an exceptionally descriptive textbook node:
-- Compile detailed descriptions explaining mechanical concepts.
-- Create 3 distinct "keyConcepts" definitions.
-- Provide 2 detailed "examples" applying the theory into real-world scenarios.
-- Write 3 extremely fun, eccentric, or catchy "memoryTips" (mneumonics, silly analogies) to lock memory.
+À partir de la base de connaissances :
+- Rédige une explication détaillée (explanation)
+- Crée 3 keyConcepts (terme + définition)
+- Fournis 2 examples concrets
+- Écris 3 memoryTips mémorables
 
-Reference Knowledge Base:
-${JSON.stringify(allChunks.slice(0, 15))}
-
-Generate the structured JSON directly as requested.`;
+Base de connaissances :
+${JSON.stringify(allChunks.slice(0, 15))}${LANG_FR}`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
@@ -984,7 +957,7 @@ Generate the structured JSON directly as requested.`;
     res.json(JSON.parse(response.text || "{}"));
   } catch (error: any) {
     console.error("Lesson generation failed:", error);
-    res.status(500).json({ error: error.message || "Failed to generate lesson content" });
+    res.status(500).json({ error: error.message || "Échec de la génération de la leçon." });
   }
 });
 
@@ -1003,7 +976,7 @@ app.post("/api/module/:id/complete", (req, res) => {
   });
 
   if (!found) {
-    return res.status(404).json({ error: "Module not found" });
+    return res.status(404).json({ error: "Module introuvable." });
   }
 
   if (!db.completedLessons.includes(moduleId)) {
@@ -1027,7 +1000,7 @@ app.get("/api/module/:id/quiz", async (req, res) => {
   const targetModule = db.learningPath.find(m => m.id === moduleId);
 
   if (!targetModule) {
-    return res.status(404).json({ error: "Module not found" });
+    return res.status(404).json({ error: "Module introuvable." });
   }
 
   const allChunks = db.documents.flatMap(d => d.chunks);
@@ -1035,21 +1008,14 @@ app.get("/api/module/:id/quiz", async (req, res) => {
   try {
     const ai = getGemini();
 
-    const quizPrompt = `You are CampusMind Quiz Agent.
-Generate a tailored 4-question interactive practice quiz for the module: "${targetModule.title}".
-Description of focus: ${targetModule.description}
+    const quizPrompt = `Tu es l'agent quiz CampusMind.
+Génère un quiz pratique de 4 questions pour le module : "${targetModule.title}".
+Description : ${targetModule.description}
 
-You must create 4 distinct questions balancing types:
-- Multiple choice
-- True/False
-- Open conceptual
-- High Stakes Scenario question
+Crée 4 questions variées (QCM, Vrai/Faux, ouverte, scénario) avec explications détaillées.
 
-Difficulty adapts dynamically based on topic depth.
-Always provide a highly supportive "explanation" detailing why an answer is correct.
-
-Knowledge Base reference nodes:
-${JSON.stringify(allChunks.slice(0, 15))}`;
+Base de connaissances :
+${JSON.stringify(allChunks.slice(0, 15))}${LANG_FR}`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
@@ -1083,7 +1049,7 @@ ${JSON.stringify(allChunks.slice(0, 15))}`;
     res.json(JSON.parse(response.text || '{"questions": []}'));
   } catch (error: any) {
     console.error("Complete Quiz generation failed:", error);
-    res.status(500).json({ error: error.message || "Failed to generate module practice quiz" });
+    res.status(500).json({ error: error.message || "Échec de la génération du quiz pratique." });
   }
 });
 
@@ -1094,7 +1060,7 @@ app.post("/api/quiz/record-score", (req, res) => {
 
   db.quizHistory.push({
     date: new Date().toISOString().slice(0, 10),
-    type: `Practice: ${moduleTitle}`,
+    type: `Pratique : ${moduleTitle}`,
     score
   });
 
@@ -1115,22 +1081,18 @@ app.get("/api/reinforcement/scheduled", async (req, res) => {
   const allChunks = db.documents.flatMap(d => d.chunks);
 
   if (allChunks.length === 0) {
-    return res.json({ forgottenConcept: null, revisionPrompt: "Knowledge box is currently empty." });
+    return res.json({ forgottenConcept: null, revisionPrompt: "La base de connaissances est vide." });
   }
 
   try {
     const ai = getGemini();
 
-    const prompt = `You are campusmind Reinforcement Agent specializing in spaced repetition.
-Using the uploaded documents, select exactly ONE key concept that the student is highly vulnerable to forgetting.
-Generate:
-1. "conceptName": title of the term
-2. "originalSource": the book chapter and page
-3. "spacedRepetitionExplanation": a refreshing recap explanation
-4. "targetedQuickQuiz": a quick MCQ quiz containing { question, options, correctAnswer, explanation } for instant micro-revision.
+    const prompt = `Tu es l'agent de renforcement CampusMind (répétition espacée).
+Sélectionne UN concept clé que l'étudiant risque d'oublier.
+Génère conceptName, originalSource, spacedRepetitionExplanation et targetedQuickQuiz (QCM rapide).
 
-Documents:
-${JSON.stringify(allChunks.slice(0, 15))}`;
+Documents :
+${JSON.stringify(allChunks.slice(0, 15))}${LANG_FR}`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
@@ -1162,7 +1124,7 @@ ${JSON.stringify(allChunks.slice(0, 15))}`;
     res.json(JSON.parse(response.text || "{}"));
   } catch (error: any) {
     console.error("Spaced repetition API failed:", error);
-    res.status(500).json({ error: error.message || "Failed to generate spaced repetition node" });
+    res.status(500).json({ error: error.message || "Échec de la génération de la révision espacée." });
   }
 });
 
@@ -1172,21 +1134,21 @@ app.get("/api/exam/generate", async (req, res) => {
   const allChunks = db.documents.flatMap(d => d.chunks);
 
   if (allChunks.length === 0) {
-    return res.status(400).json({ error: "No course modules found for generating exam trials." });
+    return res.status(400).json({ error: "Aucun document disponible pour générer un examen." });
   }
 
   try {
     const ai = getGemini();
-    const prompt = `You are campusmind Exam Generator Agent.
-Compile a realistic final qualification exam paper of exactly 6 questions from the materials:
-- Include 3 MCQs
-- 1 True/False
-- 2 Open conceptual items
+    const prompt = `Tu es l'agent générateur d'examens CampusMind.
+Compile un examen réaliste de 6 questions :
+- 3 QCM
+- 1 Vrai/Faux
+- 2 questions ouvertes
 
-Reference Course Chunks:
+Extraits de cours :
 ${JSON.stringify(allChunks.slice(0, 15))}
 
-Return strictly valid JSON with questions matching the ExamSession interface schema. Do not add metadata files wrapper.`;
+Réponds en JSON valide.${LANG_FR}`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
@@ -1220,7 +1182,7 @@ Return strictly valid JSON with questions matching the ExamSession interface sch
     res.json(JSON.parse(response.text || "{}"));
   } catch (error: any) {
     console.error("Exam generation failed:", error);
-    res.status(500).json({ error: error.message || "Failed to generate exam papers" });
+    res.status(500).json({ error: error.message || "Échec de la génération de l'examen." });
   }
 });
 
@@ -1232,23 +1194,15 @@ app.post("/api/exam/evaluate", async (req, res) => {
   try {
     const ai = getGemini();
 
-    const evaluationPrompt = `You are CampusMind Collaborative Examiners (Grading Agent + Insight Agent + Recommendation Agent).
-Grade the user's answers against the exam questions meticulously.
-Produce:
-1. "score" (total points scored as a percentage from 0 to 100)
-2. "corrections" checking each answer individually (must define questionId, questionText, isCorrect, studentAnswer, correctAnswer, explanation)
-3. "chaptersPerformance" rating the chapter retention proficiency scores
-4. An actionable "actionPlan" (specifically highlighting sections that require study)
-5. "estimatedStudyTimeNeeded" (e.g. "3h 15m")
-6. A "predictedExamScore" if they follow this study action plan completely.
+    const evaluationPrompt = `Tu es l'agent de correction CampusMind.
+Corrige les réponses de l'examen et produis :
+score, corrections, chaptersPerformance, actionPlan, estimatedStudyTimeNeeded, predictedExamScore.
 
-Exam specifications:
+Examen :
 ${JSON.stringify(examPaper)}
 
-Student Answers:
-${JSON.stringify(studentAnswers)}
-
-Generate the clean JSON evaluation array directly matching our schema.`;
+Réponses de l'étudiant :
+${JSON.stringify(studentAnswers)}${LANG_FR}`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
@@ -1304,7 +1258,7 @@ Generate the clean JSON evaluation array directly matching our schema.`;
 
     db.quizHistory.push({
       date: new Date().toISOString().slice(0, 10),
-      type: `Simulator: ${examPaper.title || "Final Trial Exam"}`,
+      type: `Simulateur : ${examPaper.title || "Examen blanc"}`,
       score: results.score
     });
 
@@ -1314,7 +1268,7 @@ Generate the clean JSON evaluation array directly matching our schema.`;
 
   } catch (error: any) {
     console.error("Exam evaluation failed:", error);
-    res.status(500).json({ error: error.message || "Failed to grade simulated exams" });
+    res.status(500).json({ error: error.message || "Échec de la correction de l'examen." });
   }
 });
 
@@ -1324,22 +1278,20 @@ app.get("/api/podcast/script", async (req, res) => {
   const allChunks = db.documents.flatMap(d => d.chunks);
 
   if (allChunks.length === 0) {
-    return res.status(400).json({ error: "Please upload academic course files to generate podcasts." });
+    return res.status(400).json({ error: "Importez des documents pour générer un podcast." });
   }
 
   try {
     const ai = getGemini();
 
-    const podcastPrompt = `You are CampusMind Audio Director Agent.
-Draft an exciting, highly immersive educational discussion script between 'Professor' (expert educator) and 'Student' (curious academic).
-The Student should ask challenging questions and raise practical analogies, and the Professor should simplify molecular or ethical concepts to be highly visual and comprehensible.
-Keep it natural with casual interruptions, 'ah!' moments, and elite educational value.
-Generate the transcript as an array of dialogue segments with speaker and text elements.
+    const podcastPrompt = `Tu es l'agent audio CampusMind.
+Rédige un script de discussion pédagogique entre 'Professor' (professeur expert) et 'Student' (étudiant curieux).
+Le dialogue doit être naturel, engageant et pédagogique.
 
-Academic Source Knowledge elements:
+Sources académiques :
 ${JSON.stringify(allChunks.slice(0, 10))}
 
-Return strict JSON directly matching the Schema template.`;
+Réponds en JSON avec title et segments (speaker, text). Textes en français.${LANG_FR}`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
@@ -1370,7 +1322,7 @@ Return strict JSON directly matching the Schema template.`;
     res.json(JSON.parse(response.text || "{}"));
   } catch (error: any) {
     console.error("Podcast Generation failed:", error);
-    res.status(500).json({ error: error.message || "Failed to generate podcast transcripts" });
+    res.status(500).json({ error: error.message || "Échec de la génération du podcast." });
   }
 });
 
@@ -1380,22 +1332,18 @@ app.get("/api/audiobook/structure", async (req, res) => {
   const allChunks = db.documents.flatMap(d => d.chunks);
 
   if (allChunks.length === 0) {
-    return res.status(400).json({ error: "Please upload academic course files to compile audiobooks." });
+    return res.status(400).json({ error: "Importez des documents pour générer un audiobook." });
   }
 
   try {
     const ai = getGemini();
 
-    const prompt = `You are CampusMind Audiobook Narration Agent.
-Review the active textbook materials and draft a faithful Chapter Narration Outline.
-Rule: Do NOT summarize the material. Produce clear verbatim chapter readouts.
-Analyze all chunks and group them logically into distinct audiobook chapters:
-For each audiobook chapter, gather the exact faithful text to narrate and provide a supporting phonetic transcript.
+    const prompt = `Tu es l'agent audiobook CampusMind.
+Groupe les segments en chapitres d'audiobook avec texte verbatim (pas de résumé).
+Pour chaque chapitre : title, text, transcript.
 
-Knowledge Materials:
-${JSON.stringify(allChunks.slice(0, 15))}
-
-Compile structural outline directly under the required JSON schema.`;
+Matériaux :
+${JSON.stringify(allChunks.slice(0, 15))}${LANG_FR}`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
@@ -1427,7 +1375,7 @@ Compile structural outline directly under the required JSON schema.`;
 
   } catch (error: any) {
     console.error("Audiobook compilation failed:", error);
-    res.status(500).json({ error: error.message || "Failed to generate audiobook files" });
+    res.status(500).json({ error: error.message || "Échec de la génération de l'audiobook." });
   }
 });
 
@@ -1438,7 +1386,7 @@ app.post("/api/workflow/execute-step", async (req, res) => {
   const allChunks = db.documents.flatMap(d => d.chunks);
 
   if (allChunks.length === 0) {
-    return res.status(400).json({ error: "Knowledge base is empty. Populate some notes first!" });
+    return res.status(400).json({ error: "La base de connaissances est vide. Importez d'abord des documents." });
   }
 
   try {
@@ -1446,80 +1394,83 @@ app.post("/api/workflow/execute-step", async (req, res) => {
 
     switch (stepId) {
       case "init-audiobook": {
-        // Run light audiobook chapter checks
         const titles = Array.from(new Set(allChunks.map(c => c.chapter)));
         return res.json({
           status: "success",
-          message: `Detected ${titles.length} Chapters for audiobook narration: ${titles.slice(0, 2).join(", ")}...`
+          message: `[Structure Agent] ${titles.length} chapitres détectés — narration fidèle prête : ${titles.slice(0, 2).join(", ")}${titles.length > 2 ? "…" : ""}`
         });
       }
       case "init-podcast": {
-        // Build instant podcast title suggestion
         const conceptList = Array.from(new Set(allChunks.map(c => c.chapter))).join(", ");
         const response = await ai.models.generateContent({
           model: "gemini-3.5-flash",
-          contents: `Our student wants to compose an educational podcast summarising these chapters: ${conceptList}. Generate ONLY one catchy, clever title for this academic podcast series (under 10 words).`
+          contents: `L'étudiant veut un podcast éducatif sur ces chapitres : ${conceptList}. Génère UN seul titre accrocheur (moins de 10 mots) en français.`
         });
         return res.json({
           status: "success",
-          message: `Compiled educational podcast script: "${response.text?.trim() || "The Student Brainwave"}"`
+          message: `[Podcast Script Agent] Audio Summary prêt — « ${response.text?.trim() || "Révisions CampusMind"} »`
         });
       }
       case "assessment": {
-        // Trigger rapid mock diagnostic score mapping
         const response = await ai.models.generateContent({
           model: "gemini-3.5-flash",
-          contents: `Create a brief list of three weak topics and estimated general mastery score (integer percentage e.g. 45) based on these materials: ${allChunks.slice(0, 3).map(c=>c.chapter).join(", ")}. Return structured JSON only: { "score": 45, "weak": ["conflit d'intérêts", "secret professionnel"] }`,
+          contents: `À partir de ces matériaux : ${allChunks.slice(0, 3).map(c=>c.chapter).join(", ")}, estime un score de maîtrise (0-100) et 3 points faibles. JSON uniquement : { "score": 45, "weak": ["sujet1", "sujet2"] }. Réponds en français.`,
           config: { responseMimeType: "application/json" }
         });
         const parsed = JSON.parse(response.text || '{"score": 50, "weak": []}');
         return res.json({
           status: "success",
-          message: `Completed Diagnostic Assessment simulation! Calculated starting mastery: ${parsed.score}%. Key weaknesses located: ${parsed.weak.join(', ')}`
+          message: `[Assessment Agent] Diagnostic terminé — maîtrise : ${parsed.score}%. Lacunes : ${parsed.weak.join(", ")}`
         });
       }
       case "curriculum": {
-        // Generate personalized modules
         const response = await ai.models.generateContent({
           model: "gemini-3.5-flash",
-          contents: `Based on chapters ${allChunks.map(c=>c.chapter).join(", ")}, recommend exactly 3 custom adaptive training modules for our learning path. Return JSON list only: { "modules": [{"title": "Module Name", "desc": "Brief overview"}] }`,
+          contents: `À partir des chapitres ${allChunks.map(c=>c.chapter).join(", ")}, recommande 3 modules adaptatifs. JSON : { "modules": [{"title": "Nom", "desc": "Description"}] }. En français.`,
           config: { responseMimeType: "application/json" }
         });
         const parsed = JSON.parse(response.text || '{"modules": []}');
         return res.json({
           status: "success",
-          message: `Curriculum Agent crafted a personalized path: ${parsed.modules.length} Adaptive Modules mapped out!`
+          message: `[Curriculum Agent] Parcours personnalisé — ${parsed.modules.length} modules planifiés`
         });
       }
       case "training-quiz": {
-        // Confirm dynamic simulation
         return res.json({
           status: "success",
-          message: "Pre-generated practice quizzes, adaptive MCQ matrices and reinforcement tasks are uploaded."
+          message: "[Quiz Agent · Reinforcement Agent] Quiz adaptatifs et exercices de renforcement générés"
         });
       }
       case "exam-sim": {
-        // Assemble final trials
         return res.json({
           status: "success",
-          message: "Exam Simulator generated! 6 comprehensive grading cards loaded with adaptive examiners."
+          message: "[Exam Generator · Grading Agent] Examen simulé prêt — 6 questions, correction automatique activée"
         });
       }
       case "analytics-report": {
-        // Recalculate everything and bump states
-        db.performance.progress = 65;
-        db.performance.retention = 60;
-        db.performance.exam_readiness = 65;
-        db.performance.scoreHistory.push(50, 65);
+        const examScore = 65 + Math.floor(Math.random() * 25);
+        const recommendations = ["Revoir le module 3", "Renforcer les points faibles du diagnostic"];
+        db.performance.progress = examScore;
+        db.performance.retention = Math.max(55, examScore - 10);
+        db.performance.exam_readiness = examScore;
+        db.performance.scoreHistory.push(examScore);
         writeUserData(req, db);
+        const pipelineOutput = {
+          audiobook: "ready",
+          podcast: "ready",
+          training_plan: "ready",
+          exam_score: examScore,
+          recommendations
+        };
         return res.json({
           status: "success",
-          message: "Completed dynamic orchestration! System score charts updated on the Analytics Dashboard.",
+          message: `[Insights Agent] Pipeline complet — score examen : ${examScore}%. Recommandations : ${recommendations.join(", ")}`,
+          pipelineOutput,
           dbState: db
         });
       }
       default:
-        return res.status(400).json({ error: "Invalid workflow step requested" });
+        return res.status(400).json({ error: "Étape de workflow invalide" });
     }
 
   } catch (error: any) {

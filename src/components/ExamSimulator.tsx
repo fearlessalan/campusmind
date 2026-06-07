@@ -16,20 +16,27 @@ import {
   FileText
 } from "lucide-react";
 import { ExamSession, ExamGrading } from "../types";
-import { apiFetch } from "../lib/api";
+import { apiFetch, parseApiResponse } from "../lib/api";
+import { evaluateExam, generateExam } from "../lib/campusAi";
+import { useModal } from "../context/ModalContext";
 
 interface ExamSimulatorProps {
   documents: any[];
   onExamSaved: (db: any) => void;
 }
 
+type DifficultyLevel = "Facile" | "Moyen" | "Difficile";
+
+const DIFFICULTY_OPTIONS: DifficultyLevel[] = ["Facile", "Moyen", "Difficile"];
+
 export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorProps) {
-  
+  const { showAlert } = useModal();
+
   // States: "setup" | "active" | "results"
   const [examState, setExamState] = useState<"setup" | "active" | "results">("setup");
   
   // Exam metadata fields
-  const [difficulty, setDifficulty] = useState<"Easy" | "Medium" | "Hard">("Medium");
+  const [difficulty, setDifficulty] = useState<DifficultyLevel>("Moyen");
   const [examDuration, setExamDuration] = useState<number>(10); // inside minutes
 
   // Active Session Variables
@@ -72,15 +79,13 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
     setCurrentQuestionIdx(0);
 
     try {
-      const response = await apiFetch("/api/exam/generate");
-      if (!response.ok) throw new Error("Could not construct simulator guidelines");
-      const data = await response.json();
-      
+      if (documents.length === 0) throw new Error("Importez d'abord des documents.");
+      const data = await generateExam(documents);
       setActiveExam(data);
       setSecondsRemaining(examDuration * 60);
       setExamState("active");
     } catch (err: any) {
-      alert("Exam generation failed: " + err.message);
+      showAlert("Exam Simulator", err.message, "error");
     } finally {
       setIsLoadingExam(false);
     }
@@ -98,22 +103,18 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
     setExamState("results");
 
     try {
-      const response = await apiFetch("/api/exam/evaluate", {
+      const grading = await evaluateExam(activeExam, studentAnswers);
+      const response = await apiFetch("/api/exam/save-grading", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          examPaper: activeExam,
-          studentAnswers: studentAnswers
-        })
+        body: JSON.stringify({ grading, examTitle: activeExam.title })
       });
+      const data = await parseApiResponse<{ dbState: Record<string, unknown> }>(response);
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Grading malfunctioned");
-
-      setExamResults(data.grading);
-      onExamSaved(data.dbState);
+      setExamResults(grading);
+      if (data.dbState) onExamSaved(data.dbState);
     } catch (err: any) {
-      alert("Failed grading submission: " + err.message);
+      showAlert("Correction", err.message, "error");
       setExamState("active");
     } finally {
       setIsGrading(false);
@@ -121,7 +122,7 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
   };
 
   const autoSubmitExam = () => {
-    alert("Simulation duration threshold elapsed! The Examiner Agent is auto-submitting all answers.");
+    showAlert("Temps écoulé", "Durée de simulation écoulue ! L'agent examinateur soumet automatiquement toutes les réponses.", "warning");
     submitExam();
   };
 
@@ -144,13 +145,18 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
     <div className="space-y-8 animate-fadeIn">
       
       {/* Dynamic Header */}
-      <div className="p-6 bg-white rounded-2xl border border-slate-100 shadow-3xs space-y-1">
-        <h1 className="text-2xl font-sans font-bold text-slate-900 flex items-center gap-2">
-          <Award className="w-6 h-6 text-indigo-500" /> Qualification Exam Simulator
+      <div className="p-6 bg-white rounded-2xl border border-outline-variant md-elevation-1">
+        <h1 className="text-2xl font-bold text-on-surface flex items-center gap-2">
+          <Award className="w-6 h-6 text-primary" /> Exam Simulator
         </h1>
-        <p className="text-xs text-slate-500 max-w-xl">
-          Prepare under authentic exam configurations managed by cooperating AI Examiner, Grading, Insight, and Recommendation Agents.
+        <p className="text-sm text-on-surface-variant max-w-xl mt-1">
+          Génération d'examens réalistes, surveillance du temps, correction automatique, analyse des erreurs et recommandations de révision.
         </p>
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          {["Exam Generator", "Proctor", "Grading", "Insights", "Recommendation"].map((agent) => (
+            <span key={agent} className="md-chip text-[10px]">{agent}</span>
+          ))}
+        </div>
       </div>
 
       {/* PHASE 1: CONFIGURATION SETUPS */}
@@ -158,22 +164,22 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-8 bg-white p-6 rounded-2xl border border-slate-100 shadow-xs space-y-6">
             <h2 className="text-sm font-sans font-semibold text-slate-900 flex items-center gap-1.5 pb-3 border-b border-slate-55">
-              <PlayCircle className="w-4 h-4 text-indigo-500" /> Simulation Configurations
+              <PlayCircle className="w-4 h-4 text-indigo-500" /> Configuration de la simulation
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5 text-xs">
-                <label className="font-mono text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Academic Difficulty Mode</label>
+                <label className="font-mono text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Niveau de difficulté académique</label>
                 <div className="flex gap-2">
-                  {["Easy", "Medium", "Hard"].map((diff) => (
+                  {DIFFICULTY_OPTIONS.map((diff) => (
                     <button
                       key={diff}
                       type="button"
-                      onClick={() => setDifficulty(diff as any)}
+                      onClick={() => setDifficulty(diff)}
                       className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
                         difficulty === diff
-                          ? "bg-slate-900 text-white border-transparent shadow-xs"
-                          : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                          ? "bg-primary text-on-primary border-transparent shadow-xs"
+                          : "bg-surface-container-low border-outline-variant text-on-surface hover:bg-surface-container"
                       }`}
                     >
                       {diff}
@@ -183,7 +189,7 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
               </div>
 
               <div className="space-y-1.5 text-xs">
-                <label className="font-mono text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Duration Limitation</label>
+                <label className="font-mono text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Durée limite</label>
                 <div className="flex items-center gap-2">
                   {[5, 10, 20].map((time) => (
                     <button
@@ -192,8 +198,8 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
                       onClick={() => setExamDuration(time)}
                       className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
                         examDuration === time
-                          ? "bg-slate-900 text-white border-transparent shadow-xs"
-                          : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                          ? "bg-primary text-on-primary border-transparent shadow-xs"
+                          : "bg-surface-container-low border-outline-variant text-on-surface hover:bg-surface-container"
                       }`}
                     >
                       {time} min
@@ -211,35 +217,35 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
               >
                 {isLoadingExam ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" /> Concluding Generator parameters...
+                    <Loader2 className="w-4 h-4 animate-spin" /> Finalisation des paramètres du générateur...
                   </>
                 ) : (
                   <>
-                    Inaugurate Simulator Testing Session <ArrowRight className="w-4 h-4" />
+                    Lancer la session de simulation <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </button>
             </div>
           </div>
 
-          <div className="lg:col-span-4 bg-linear-to-b from-indigo-950 to-slate-900 text-indigo-200 p-5 rounded-2xl shadow-xl flex flex-col justify-between">
+          <div className="lg:col-span-4 bg-primary-container/40 border border-primary/15 text-on-surface p-5 rounded-2xl md-elevation-2 flex flex-col justify-between">
             <div className="space-y-4 text-xs">
-              <span className="px-2 py-0.5 rounded-sm bg-indigo-500/15 border border-indigo-400/15 text-[9px] font-mono text-indigo-300 tracking-wider uppercase font-bold">
-                Examiner's Guidelines
+              <span className="px-2 py-0.5 rounded-sm bg-primary/10 border border-primary/20 text-[9px] font-mono text-primary tracking-wider uppercase font-bold">
+                Consignes de l'examinateur
               </span>
-              <p className="text-slate-300 leading-relaxed font-sans">
-                The simulator reads active chapters to compile 6 deep, qualitative exam questions testing concepts across MCQs, True/False, and comparative definitions.
+              <p className="text-on-surface-variant leading-relaxed font-sans">
+                Le simulateur lit les chapitres actifs pour compiler 6 questions d'examen approfondies couvrant QCM, Vrai/Faux et définitions comparatives.
               </p>
               <ul className="space-y-2 text-[11px] text-slate-400 list-inside list-disc">
-                <li>No access to study summaries during timer active</li>
-                <li>Live results detailing mistake resolutions</li>
-                <li>Actionable post-exam study roadmap compiled</li>
+                <li>Aucun accès aux résumés de cours pendant le chronomètre</li>
+                <li>Résultats en direct avec résolution des erreurs</li>
+                <li>Feuille de route d'étude post-examen compilée</li>
               </ul>
             </div>
             
             {!hasDocs && (
               <div className="mt-4 p-3 bg-red-950/20 text-red-300 border border-red-900/40 rounded-lg text-[10px] leading-relaxed">
-                *Knowledge base is empty. Incorporate courses on the Dashboard beforehand!
+                *La base de connaissances est vide. Importez des cours depuis le tableau de bord au préalable !
               </div>
             )}
           </div>
@@ -254,10 +260,10 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
           <div className="lg:col-span-4 space-y-6">
             
             {/* Countdown Badge */}
-            <div className="bg-slate-900 text-white p-5 rounded-2xl border border-indigo-950 flex items-center justify-between shadow-xl">
+            <div className="bg-primary-container/50 border border-primary/20 text-on-surface p-5 rounded-2xl flex items-center justify-between md-elevation-2">
               <div className="space-y-0.5">
-                <span className="text-[9px] font-mono text-slate-450 uppercase tracking-wider font-bold block">Examiner Clock</span>
-                <span className="text-xs font-sans text-slate-300">Countdown limits mapping active</span>
+                <span className="text-[9px] font-mono text-slate-450 uppercase tracking-wider font-bold block">Chronomètre de l'examinateur</span>
+                <span className="text-xs font-sans text-on-surface-variant">Limites du compte à rebours actives</span>
               </div>
               <div className="flex items-center gap-1.5 bg-red-500/15 text-red-400 px-3.5 py-1.5 rounded-xl border border-red-500/10 font-mono text-lg font-bold">
                 <Timer className="w-4.5 h-4.5 animate-pulse" /> {formatTime(secondsRemaining)}
@@ -266,7 +272,7 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
 
             {/* Quick Hop Navigation Map */}
             <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs">
-              <h3 className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider mb-4">Exam Navigation Matrix</h3>
+              <h3 className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider mb-4">Matrice de navigation</h3>
               <div className="grid grid-cols-3 gap-2">
                 {activeExam.questions.map((q, idx) => {
                   const isCurrent = idx === currentQuestionIdx;
@@ -277,7 +283,7 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
                       onClick={() => setCurrentQuestionIdx(idx)}
                       className={`py-3.5 text-xs font-bold font-mono rounded-xl transition-all border cursor-pointer ${
                         isCurrent
-                          ? "bg-slate-900 text-white border-transparent scale-103 shadow-md"
+                          ? "bg-primary text-on-primary border-transparent scale-103 shadow-md"
                           : isAnswered
                           ? "bg-indigo-50 border-indigo-200 text-indigo-600"
                           : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-105"
@@ -294,7 +300,7 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
                   onClick={submitExam}
                   className="w-full py-2.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl hover:scale-102 transition-all cursor-pointer shadow-sm select-none"
                 >
-                  Conclude & Submit Exam Paper
+                  Conclure et soumettre la copie
                 </button>
               </div>
             </div>
@@ -306,10 +312,10 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
             <div>
               <div className="flex justify-between items-center pb-3 border-b border-slate-50 mb-5">
                 <span className="text-[10px] font-mono font-bold text-indigo-600 uppercase">
-                  Active Question {currentQuestionIdx + 1} of {activeExam.questions.length} (Type: {activeExam.questions[currentQuestionIdx].type})
+                  Question active {currentQuestionIdx + 1} sur {activeExam.questions.length} (Type : {activeExam.questions[currentQuestionIdx].type})
                 </span>
                 <span className="px-2 py-0.5 text-[9px] font-semibold bg-slate-50 text-slate-500 border rounded font-mono">
-                  Qualification Level
+                  Niveau de qualification
                 </span>
               </div>
 
@@ -343,7 +349,7 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
                   <div className="pt-3">
                     <textarea
                       rows={5}
-                      placeholder="Type a rigorous comparative definition breakdown regarding the queried topics..."
+                      placeholder="Saisissez une définition comparative rigoureuse sur les sujets demandés..."
                       value={studentAnswers[activeExam.questions[currentQuestionIdx].id] || ""}
                       onChange={(e) => handleSelectAnswer(activeExam.questions[currentQuestionIdx].id, e.target.value)}
                       className="w-full p-4 border rounded-xl bg-slate-50 text-xs focus:outline-hidden text-slate-700 focus:border-indigo-400 focus:bg-white"
@@ -360,7 +366,7 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
                 onClick={() => setCurrentQuestionIdx((p) => p - 1)}
                 className="px-3.5 py-1.5 text-xs text-slate-500 font-semibold bg-slate-100 hover:bg-slate-200 disabled:opacity-40 rounded-lg transition-all cursor-pointer select-none"
               >
-                Previous Section
+                Section précédente
               </button>
 
               {currentQuestionIdx === activeExam.questions.length - 1 ? (
@@ -368,14 +374,14 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
                   onClick={submitExam}
                   className="px-4 py-2 text-xs text-white font-semibold bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-all cursor-pointer select-none"
                 >
-                  Terminate Active Session
+                  Terminer la session active
                 </button>
               ) : (
                 <button
                   onClick={() => setCurrentQuestionIdx((p) => p + 1)}
                   className="px-4 py-2 text-xs text-slate-700 bg-indigo-50 hover:bg-indigo-100 font-semibold rounded-lg transition-all cursor-pointer select-none"
                 >
-                  Skip / Next Section
+                  Passer / Section suivante
                 </button>
               )}
             </div>
@@ -392,8 +398,8 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
           {isGrading ? (
             <div className="bg-white p-12 rounded-2xl border border-slate-100 shadow-xs flex flex-col items-center justify-center text-slate-500 space-y-3">
               <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-              <p className="text-xs font-mono font-bold animate-pulse">Grading Agent is checking answer parameters...</p>
-              <span className="text-[10px] text-slate-400 italic">Reviewing definitions against textbook chapters...</span>
+              <p className="text-xs font-mono font-bold animate-pulse">L'agent de notation vérifie les réponses...</p>
+              <span className="text-[10px] text-slate-400 italic">Comparaison des définitions avec les chapitres du manuel...</span>
             </div>
           ) : examResults ? (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pb-8">
@@ -403,7 +409,7 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
                 
                 {/* Gauge Panel */}
                 <div className="bg-white p-6 rounded-2xl border border-slate-101 shadow-xs text-center space-y-4">
-                  <h3 className="text-sm font-sans font-semibold text-slate-900">Scorecard Ledger</h3>
+                  <h3 className="text-sm font-sans font-semibold text-slate-900">Relevé de notes</h3>
                   
                   {/* Big SVG circular gauge */}
                   <div className="relative w-36 h-36 mx-auto">
@@ -424,14 +430,14 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                       <span className="text-3xl font-extrabold text-slate-900">{examResults.score}%</span>
-                      <span className="text-[9px] font-mono text-slate-400 uppercase font-semibold">Overall Grade</span>
+                      <span className="text-[9px] font-mono text-slate-400 uppercase font-semibold">Note globale</span>
                     </div>
                   </div>
 
                   <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
-                    <span className="text-[10px] font-mono text-slate-400 font-semibold uppercase block">Examiner Decision</span>
+                    <span className="text-[10px] font-mono text-slate-400 font-semibold uppercase block">Décision de l'examinateur</span>
                     <span className={`text-xs font-bold ${examResults.score >= 70 ? "text-emerald-600" : "text-amber-600"}`}>
-                      {examResults.score >= 70 ? "Passed, Excellent Confidence Threshold!" : "Requires Targeted Study Actions."}
+                      {examResults.score >= 70 ? "Réussi, excellent seuil de confiance !" : "Nécessite des actions d'étude ciblées."}
                     </span>
                   </div>
 
@@ -439,37 +445,37 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
                     onClick={handleReset}
                     className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-all cursor-pointer"
                   >
-                    Take Another Exam Simulation
+                    Passer une autre simulation d'examen
                   </button>
                 </div>
 
                 {/* Recommendation plan (Agent 5 - Recommendation Agent) */}
-                <div className="bg-linear-to-b from-indigo-950 to-slate-900 text-white p-5 rounded-2xl shadow-xl space-y-4">
-                  <div className="pb-3 border-b border-slate-850 flex items-center gap-1.5">
-                    <TrendingUp className="w-4 h-4 text-indigo-400" />
+                <div className="bg-secondary-container/60 border border-outline-variant text-on-surface p-5 rounded-2xl md-elevation-2 space-y-4">
+                  <div className="pb-3 border-b border-outline-variant flex items-center gap-1.5">
+                    <TrendingUp className="w-4 h-4 text-primary" />
                     <div>
-                      <h4 className="text-xs font-mono font-bold tracking-wider text-indigo-300">Action Plan Recommendations</h4>
-                      <span className="text-[9px] text-slate-450 block">Formed by Recommendation Agent</span>
+                      <h4 className="text-xs font-mono font-bold tracking-wider text-primary">Recommandations du plan d'action</h4>
+                      <span className="text-[9px] text-on-surface-variant block">Élaboré par l'agent de recommandation</span>
                     </div>
                   </div>
 
                   <ul className="space-y-3.5 text-xs">
                     {examResults.actionPlan.map((rec, idx) => (
                       <li key={idx} className="flex items-start gap-2.5">
-                        <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-                        <span className="text-slate-250 font-sans leading-relaxed">{rec}</span>
+                        <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                        <span className="text-on-surface font-sans leading-relaxed">{rec}</span>
                       </li>
                     ))}
                   </ul>
 
-                  <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-850 text-center">
-                    <div className="p-2 bg-slate-850/40 border border-slate-800 rounded-xl space-y-0.5">
-                      <span className="text-[8px] font-mono uppercase text-slate-400 font-bold block">Study Budget</span>
-                      <span className="text-xs font-bold text-slate-150 font-mono">{examResults.estimatedStudyTimeNeeded}</span>
+                  <div className="grid grid-cols-2 gap-3 pt-4 border-t border-outline-variant text-center">
+                    <div className="p-2 bg-white border border-outline-variant rounded-xl space-y-0.5">
+                      <span className="text-[8px] font-mono uppercase text-on-surface-variant font-bold block">Budget d'étude</span>
+                      <span className="text-xs font-bold text-on-surface font-mono">{examResults.estimatedStudyTimeNeeded}</span>
                     </div>
-                    <div className="p-2 bg-slate-850/40 border border-slate-800 rounded-xl space-y-0.5">
-                      <span className="text-[8px] font-mono uppercase text-slate-400 font-bold block">Predicted Grade</span>
-                      <span className="text-xs font-bold text-slate-150 font-mono">{examResults.predictedExamScore}%</span>
+                    <div className="p-2 bg-white border border-outline-variant rounded-xl space-y-0.5">
+                      <span className="text-[8px] font-mono uppercase text-on-surface-variant font-bold block">Note prédite</span>
+                      <span className="text-xs font-bold text-on-surface font-mono">{examResults.predictedExamScore}%</span>
                     </div>
                   </div>
                 </div>
@@ -481,7 +487,7 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
                 
                 {/* Section Proficiency breakdown matrix (Insight Agent) */}
                 <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs space-y-4">
-                  <h3 className="text-sm font-sans font-semibold text-slate-900">Module Retention Insights</h3>
+                  <h3 className="text-sm font-sans font-semibold text-slate-900">Analyse de rétention par module</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {examResults.chaptersPerformance.map((chap, idx) => (
                       <div key={idx} className="space-y-1.5 p-3 rounded-lg bg-slate-50 border border-slate-100 text-xs">
@@ -504,16 +510,16 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
 
                 {/* Audit details */}
                 <div className="space-y-4">
-                  <h3 className="text-sm font-sans font-semibold text-slate-900">Graded Answers Review</h3>
+                  <h3 className="text-sm font-sans font-semibold text-slate-900">Revue des réponses notées</h3>
                   
                   {examResults.corrections.map((corr, idx) => (
                     <div key={corr.questionId} className="p-4 rounded-xl bg-white border border-slate-100 shadow-3xs space-y-3.5 text-xs">
                       <div className="flex justify-between items-center pb-2.5 border-b border-slate-50">
                         <span className="text-[10px] font-mono font-bold uppercase text-slate-400">Question {idx + 1}</span>
                         {corr.isCorrect ? (
-                          <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 font-mono text-[9px] font-bold uppercase">Passed</span>
+                          <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 font-mono text-[9px] font-bold uppercase">Réussi</span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-600 font-mono text-[9px] font-bold uppercase">Audited</span>
+                          <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-600 font-mono text-[9px] font-bold uppercase">À revoir</span>
                         )}
                       </div>
 
@@ -521,20 +527,20 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
 
                       <div className="space-y-1.5 p-3 rounded-lg bg-slate-50 border border-slate-100 leading-relaxed font-mono text-[11px] text-slate-650">
                         <div>
-                          <span className="font-bold text-slate-400 block pb-0.5 text-[10px]">Your Selection:</span>
-                          <span className={corr.isCorrect ? "text-emerald-600" : "text-rose-600"}>{corr.studentAnswer || "[No response provided]"}</span>
+                          <span className="font-bold text-slate-400 block pb-0.5 text-[10px]">Votre réponse :</span>
+                          <span className={corr.isCorrect ? "text-emerald-600" : "text-rose-600"}>{corr.studentAnswer || "[Aucune réponse fournie]"}</span>
                         </div>
                         
                         {!corr.isCorrect && (
                           <div className="pt-2 mt-2 border-t border-slate-200/40">
-                            <span className="font-bold text-slate-400 block pb-0.5 text-[10px]">Expected Solution:</span>
+                            <span className="font-bold text-slate-400 block pb-0.5 text-[10px]">Solution attendue :</span>
                             <span className="text-slate-800">{corr.correctAnswer}</span>
                           </div>
                         )}
                       </div>
 
                       <div className="p-3 bg-linear-to-b from-indigo-50/10 to-indigo-50/20 border border-indigo-100/30 rounded-lg text-[10px] text-slate-500 flex flex-col gap-0.5">
-                        <span className="font-semibold text-indigo-700 font-sans block pb-0.5 flex items-center gap-1">Correction explanation:</span>
+                        <span className="font-semibold text-indigo-700 font-sans block pb-0.5 flex items-center gap-1">Explication de correction :</span>
                         <span className="block leading-relaxed">{corr.explanation}</span>
                       </div>
 
@@ -547,7 +553,7 @@ export default function ExamSimulator({ documents, onExamSaved }: ExamSimulatorP
             </div>
           ) : (
             <div className="py-6 text-center text-slate-400 text-xs shadow">
-              Evaluation matrices unavailable. Re-compile diagnostic above.
+              Matrices d'évaluation indisponibles. Relancez le diagnostic ci-dessus.
             </div>
           )}
 

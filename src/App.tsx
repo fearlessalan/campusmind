@@ -1,17 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { 
-  Building2, 
-  Database, 
-  MessageSquare, 
-  GraduationCap, 
-  Award, 
-  Play, 
-  Sliders, 
   Sparkles,
   RefreshCw,
   Loader2,
-  LogOut,
-  User
+  LogOut
 } from "lucide-react";
 
 import NotebookWorkspace from "./components/NotebookWorkspace";
@@ -20,9 +12,12 @@ import { AcademicDocument, PerformanceStats, LearningModule, Course } from "./ty
 import { auth, googleProvider, signInWithPopup, signOut } from "./firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { apiFetch } from "./lib/api";
+import { useModal } from "./context/ModalContext";
 
 export default function App() {
+  const { showAlert, showConfirm } = useModal();
   const [activeView, setActiveView] = useState<"dashboard" | "workspace">("dashboard");
+  const [workspaceInitialModal, setWorkspaceInitialModal] = useState<"ingest" | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [activeCourseId, setActiveCourseId] = useState<string>("");
   const [documents, setDocuments] = useState<AcademicDocument[]>([]);
@@ -70,7 +65,7 @@ export default function App() {
     setLoadingDB(true);
     try {
       const response = await apiFetch("/api/db");
-      if (!response.ok) throw new Error("Could not reach DB endpoint");
+      if (!response.ok) throw new Error("Impossible de joindre le serveur");
       const data = await response.json();
       
       setCourses(data.courses || []);
@@ -116,8 +111,10 @@ export default function App() {
       } else {
         setActiveDocId(null);
       }
+      setWorkspaceInitialModal("ingest");
+      setActiveView("workspace");
     } catch (err: any) {
-      alert("Erreur: " + err.message);
+      showAlert("Erreur", err.message, "error");
     } finally {
       setLoadingDB(false);
     }
@@ -148,14 +145,18 @@ export default function App() {
         setActiveDocId(null);
       }
     } catch (err: any) {
-      alert("Erreur: " + err.message);
+      showAlert("Erreur", err.message, "error");
     } finally {
       setLoadingDB(false);
     }
   };
 
   const handleDeleteCourse = async (courseId: string) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer ce cours ? Tous ses documents associés seront perdus.")) return;
+    const confirmed = await showConfirm(
+      "Supprimer le cours",
+      "Êtes-vous sûr de vouloir supprimer ce cours ? Tous ses documents associés seront perdus."
+    );
+    if (!confirmed) return;
     setLoadingDB(true);
     try {
       const response = await apiFetch("/api/courses/delete", {
@@ -180,7 +181,7 @@ export default function App() {
         setActiveDocId(null);
       }
     } catch (err: any) {
-      alert("Erreur: " + err.message);
+      showAlert("Erreur", err.message, "error");
     } finally {
       setLoadingDB(false);
     }
@@ -207,30 +208,12 @@ export default function App() {
     setLoadingDB(false);
   };
 
-  const handleLoadDemo = async (topic: "biology" | "ethics") => {
-    setLoadingDB(true);
-    try {
-      // Re-seed DB
-      const response = await apiFetch("/api/db/reset", { method: "POST" });
-      const data = await response.json();
-      
-      setDocuments(data.db.documents);
-      setPerformance(data.db.performance);
-      setLearningPath(data.db.learningPath);
-      setCompletedLessons(data.db.completedLessons || []);
-      
-      setActiveDocId(data.db.documents[0]?.id || "demo-doc-algo");
-
-      alert("Le cours de demo d'Algorithmique et Structures de Donnees a ete charge dans votre espace !");
-    } catch (err) {
-      alert("Erreur lors du chargement de la démo: " + (err as Error).message);
-    } finally {
-      setLoadingDB(false);
-    }
-  };
-
   const handleResetDB = async () => {
-    if (!confirm("Voulez-vous réinitialiser votre espace et effacer tous les documents ?")) return;
+    const confirmed = await showConfirm(
+      "Réinitialiser l'espace",
+      "Voulez-vous réinitialiser votre espace et effacer tous les documents ?"
+    );
+    if (!confirmed) return;
     setLoadingDB(true);
     try {
       const response = await apiFetch("/api/db/reset-performance", { method: "POST" });
@@ -242,9 +225,9 @@ export default function App() {
       setCompletedLessons([]);
       setActiveDocId(null);
       
-      alert("Votre espace personnel a été réinitialisé.");
+      showAlert("Réinitialisation", "Votre espace personnel a été réinitialisé.", "success");
     } catch (err) {
-      alert("Erreur de réinitialisation: " + (err as Error).message);
+      showAlert("Erreur", (err as Error).message, "error");
     } finally {
       setLoadingDB(false);
     }
@@ -260,9 +243,9 @@ export default function App() {
       setLearningPath(data.db.learningPath.map((m: any) => ({ ...m, isCompleted: false })));
       setCompletedLessons([]);
       
-      alert("Historique des quiz et scores réinitialisés.");
+      showAlert("Performance", "Historique des quiz et scores réinitialisés.", "success");
     } catch (err) {
-      alert("Erreur: " + (err as Error).message);
+      showAlert("Erreur", (err as Error).message, "error");
     } finally {
       setLoadingDB(false);
     }
@@ -272,7 +255,7 @@ export default function App() {
     setDocuments((prev) => [...prev, doc]);
     setActiveDocId(doc.id);
     setActiveView("workspace");
-    alert(`"${doc.name}" dactylographié et indexé avec succès !`);
+    showAlert("Import réussi", `« ${doc.name} » a été indexé avec succès.`, "success");
   };
 
   const handleCurriculumUpdate = (path: LearningModule[], evaluation: any) => {
@@ -297,7 +280,7 @@ export default function App() {
     setPerformance(newDb.performance);
     setLearningPath(newDb.learningPath);
     setCompletedLessons(newDb.completedLessons || []);
-    alert("Orchestration intelligente CampusMind initialisée avec succès !");
+    showAlert("Workflow terminé", "Orchestration intelligente CampusMind initialisée avec succès !", "success");
   };
 
   if (loadingDB) {
@@ -315,12 +298,10 @@ export default function App() {
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 p-4 font-sans">
         <div className="w-full max-w-sm bg-white border border-slate-100 rounded-2xl shadow-xl p-8 hover:shadow-2xl transition-all duration-300">
           <div className="flex flex-col items-center space-y-2 mb-6">
-            <div className="w-12 h-12 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-center shadow-3xs animate-bounce animate-duration-2000">
-              <Sparkles className="w-6 h-6 text-indigo-600" />
-            </div>
             <h1 className="text-2xl font-bold text-slate-800 tracking-tight">CampusMind</h1>
-            <p className="text-xs text-slate-500 text-center">
-              Le système d'intelligence académique pour structurer vos cours et vos révisions.
+            <img src="/campusmindlogo.png" alt="CampusMind" className="w-16 h-16 object-contain" />
+            <p className="text-sm text-slate-500 text-center">
+              Transformez vos documents académiques en parcours d'apprentissage personnalisés.
             </p>
           </div>
 
@@ -365,7 +346,7 @@ export default function App() {
           </div>
         </div>
         <div className="text-[10px] text-slate-400 font-mono mt-6 text-center">
-          CampusMind • Cloud Sandbox Firestore & Auth • Données isolées
+          CampusMind • Propulsé par Gemini • Données sécurisées
         </div>
       </div>
     );
@@ -386,6 +367,8 @@ export default function App() {
         handleCurriculumUpdate={handleCurriculumUpdate}
         handleLessonComplete={handleLessonComplete}
         handleWorkflowComplete={handleWorkflowComplete}
+        initialStudioModal={workspaceInitialModal}
+        onInitialModalConsumed={() => setWorkspaceInitialModal(null)}
       />
     );
   }
@@ -401,7 +384,7 @@ export default function App() {
             <span className="text-slate-400 font-mono text-[10px] uppercase font-bold tracking-wider">Matière active :</span>
             {activeDocId ? (
               <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-100/60 rounded-lg text-indigo-700 text-xs font-semibold max-w-72 truncate block">
-                {documents.find((d) => d.id === activeDocId)?.name || "Textbook Source active"}
+                {documents.find((d) => d.id === activeDocId)?.name || "Document actif"}
               </span>
             ) : (
               <span className="px-2.5 py-1 bg-amber-50 border border-amber-100/60 rounded-lg text-amber-700 text-xs font-semibold">
@@ -434,10 +417,10 @@ export default function App() {
                onClick={() => setActiveView("workspace")}
                className="text-xs font-bold text-indigo-650 hover:underline px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-lg cursor-pointer mr-2"
              >
-               Ouvrir le Workspace
+               Ouvrir l'espace de travail
              </button>
             <div className="text-xs font-mono font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-indigo-600 inline-block animate-pulse" /> CampusMind OS
+              <span className="w-2 h-2 rounded-full bg-indigo-600 inline-block animate-pulse" /> CampusMind
             </div>
           </div>
         </header>

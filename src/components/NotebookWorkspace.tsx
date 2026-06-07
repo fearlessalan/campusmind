@@ -28,13 +28,17 @@ import {
   Trash2,
   Brain
 } from "lucide-react";
-import { AcademicDocument, DocumentChunk, LearningModule, PerformanceStats } from "../types";
+import { AcademicDocument, AudiobookChapter, DocumentChunk, LearningModule, PerformanceStats, PodcastScript } from "../types";
 import { apiFetch } from "../lib/api";
+import { generateChatResponse } from "../lib/campusAi";
+import { useModal } from "../context/ModalContext";
+import { useWorkflowRunner } from "../hooks/useWorkflowRunner";
 import IngestionHub from "./IngestionHub";
 import MediaStudio from "./MediaStudio";
 import AdaptiveTraining from "./AdaptiveTraining";
 import ExamSimulator from "./ExamSimulator";
 import WorkflowBuilder from "./WorkflowBuilder";
+import WorkflowProgressPanel from "./WorkflowProgressPanel";
 
 interface NotebookWorkspaceProps {
   documents: AcademicDocument[];
@@ -48,6 +52,8 @@ interface NotebookWorkspaceProps {
   handleCurriculumUpdate: (path: LearningModule[], evaluation: any) => void;
   handleLessonComplete: (moduleId: string) => void;
   handleWorkflowComplete: (newDb: any) => void;
+  initialStudioModal?: "ingest" | null;
+  onInitialModalConsumed?: () => void;
 }
 
 interface Message {
@@ -75,12 +81,30 @@ export default function NotebookWorkspace({
   handleIngestSuccess,
   handleCurriculumUpdate,
   handleLessonComplete,
-  handleWorkflowComplete
+  handleWorkflowComplete,
+  initialStudioModal,
+  onInitialModalConsumed
 }: NotebookWorkspaceProps) {
+  const { showAlert } = useModal();
+  const workflow = useWorkflowRunner(documents, handleWorkflowComplete);
+  const [studioPodcastScript, setStudioPodcastScript] = useState<PodcastScript | null>(null);
+  const [studioAudiobookChapters, setStudioAudiobookChapters] = useState<AudiobookChapter[] | undefined>();
+
+  const openPodcastFromWorkflow = () => {
+    if (workflow.outputs.podcastScript) setStudioPodcastScript(workflow.outputs.podcastScript);
+    setStudioAudiobookChapters(undefined);
+    setActiveStudioModal("podcast");
+  };
+
+  const openAudiobookFromWorkflow = () => {
+    if (workflow.outputs.audiobookChapters.length) setStudioAudiobookChapters(workflow.outputs.audiobookChapters);
+    setStudioPodcastScript(null);
+    setActiveStudioModal("audiobook");
+  };
+
   // Active selected documents checkboxes
   const [checkedDocIds, setCheckedDocIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [fastResearch, setFastResearch] = useState(true);
 
   // Discussion state
   const [messages, setMessages] = useState<Message[]>([]);
@@ -88,41 +112,51 @@ export default function NotebookWorkspace({
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Studio actions & floating notes state
-  const [activeStudioModal, setActiveStudioModal] = useState<
-    "podcast" | "audiobook" | "flashcards" | "quizzes" | "mockexam" | "learningpath" | "workflow" | "ingest" | null
-  >(null);
+  type StudioModal = "training" | "podcast" | "audiobook" | "exam" | "workflow" | "ingest" | null;
 
-  // preseeded custom student notes state from image
-  const [userNotes, setUserNotes] = useState<UserNote[]>([
-    {
-      id: "note-1",
-      title: "Algorithmes & Tri - Synthèse",
-      sourceCount: 2,
-      timeAgo: "Il y a 2 min",
-      content: "Les algorithmes de tri comme le Tri Fusion ou le Tri Rapide permettent d'organiser des ensembles de données de manière efficace. Le choix d'un algorithme dépend de la quantité de données et des contraintes mémoire."
+  const STUDIO_MODAL_META: Record<Exclude<StudioModal, null>, { title: string; subtitle: string }> = {
+    training: {
+      title: "Entraînement",
+      subtitle: "Assessment · Curriculum · Quiz · Performance · Reinforcement"
     },
-    {
-      id: "note-2",
-      title: "Complexité Temporelle",
-      sourceCount: 1,
-      timeAgo: "Il y a 10 min",
-      content: "La complexité temporelle évalue le temps d'exécution d'un algorithme en fonction de la taille de l'entrée. La notation Grand O permet de classifier les algorithmes de manière théorique (O(1), O(log n), O(n), O(n log n))."
+    podcast: {
+      title: "Audio Summary",
+      subtitle: "Extraction · Script podcast · Engagement · Synthèse vocale"
     },
-    {
-      id: "note-3",
-      title: "Structures de Données Linéaires",
-      sourceCount: 1,
-      timeAgo: "Il y a 1 j",
-      content: "Les structures linéaires classiques incluent les tableaux, les listes chaînées, les piles et les files. Chacune offre des compromis différents pour les opérations d'insertion, de suppression et d'accès."
+    audiobook: {
+      title: "Audiobook",
+      subtitle: "OCR · Structure · Narration · Voix"
+    },
+    exam: {
+      title: "Exam Simulator",
+      subtitle: "Génération · Surveillance · Correction · Insights · Recommandations"
+    },
+    workflow: {
+      title: "Workflow Builder",
+      subtitle: "Audiobook → Audio Summary → Entraînement → Examen → Rapport"
+    },
+    ingest: {
+      title: "Import de ressources",
+      subtitle: "Indexation et OCR de vos documents"
     }
-  ]);
+  };
+
+  const [activeStudioModal, setActiveStudioModal] = useState<StudioModal>(null);
+
+  const [userNotes, setUserNotes] = useState<UserNote[]>([]);
 
   // Editing or creating custom note variables
   const [showAddNotePrompt, setShowAddNotePrompt] = useState(false);
   const [newNoteTitle, setNewNoteTitle] = useState("");
   const [newNoteContent, setNewNoteContent] = useState("");
   const [viewNoteDetail, setViewNoteDetail] = useState<UserNote | null>(null);
+
+  useEffect(() => {
+    if (initialStudioModal) {
+      setActiveStudioModal(initialStudioModal);
+      onInitialModalConsumed?.();
+    }
+  }, [initialStudioModal]);
 
   // Auto scroll
   useEffect(() => {
@@ -161,20 +195,17 @@ export default function NotebookWorkspace({
     setIsTyping(true);
 
     try {
-      // Find the first checked document as focal context, or none if multiple are scanning
       const selectedDocId = checkedDocIds.length === 1 ? checkedDocIds[0] : (activeDocId || null);
+      const scopedDocs =
+        checkedDocIds.length > 0
+          ? documents.filter((d) => checkedDocIds.includes(d.id))
+          : documents;
 
-      const res = await apiFetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [...messages, userMsg],
-          selectedDocId
-        })
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Chat query failed");
+      const data = await generateChatResponse(
+        scopedDocs,
+        [...messages, userMsg],
+        selectedDocId
+      );
 
       setMessages(prev => [
         ...prev,
@@ -231,6 +262,27 @@ export default function NotebookWorkspace({
     doc.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const activeDoc = documents.find(d => d.id === activeDocId) || documents[0];
+
+  const activeDocTitle = activeDoc?.name || "Aucun document sélectionné";
+
+  const activeDocOverview = activeDoc?.chunks?.[0]?.content?.slice(0, 400)
+    || "Importez des sources pour commencer à explorer vos supports pédagogiques.";
+
+  const chapterSuggestions = (() => {
+    if (!activeDoc) return [];
+    const seen = new Set<string>();
+    const chapters: string[] = [];
+    for (const chunk of activeDoc.chunks) {
+      if (chunk.chapter && !seen.has(chunk.chapter)) {
+        seen.add(chunk.chapter);
+        chapters.push(chunk.chapter);
+        if (chapters.length >= 4) break;
+      }
+    }
+    return chapters;
+  })();
+
   return (
     <div className="flex flex-col h-screen bg-slate-50 text-slate-800 overflow-hidden font-sans">
       
@@ -253,22 +305,22 @@ export default function NotebookWorkspace({
             </div>
             <div>
               <h2 className="text-sm font-bold text-slate-800 tracking-tight flex items-center gap-1.5 line-clamp-1 max-w-sm md:max-w-xl">
-                {documents.find(d => d.id === activeDocId)?.name || "Algorithmique et Structures de Données"}
+                {activeDocTitle}
               </h2>
-              <span className="text-[10px] font-mono text-slate-500 block tracking-wider uppercase">Active Chat Workspace</span>
+              <span className="text-[10px] font-mono text-slate-500 block tracking-wider uppercase">Espace de discussion actif</span>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-mono font-medium">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> CampusMind OS Connecté
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> CampusMind connecté
           </div>
           <button 
             onClick={() => setActiveStudioModal("ingest")}
             className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm hover:scale-102 cursor-pointer transition-all"
           >
-            <Plus className="w-4 h-4" /> Ingestion
+            <Plus className="w-4 h-4" /> Importer
           </button>
         </div>
       </header>
@@ -327,7 +379,7 @@ export default function NotebookWorkspace({
 
               {filteredDocs.length === 0 ? (
                 <div className="text-center py-8 text-xs text-slate-400 font-sans italic">
-                  Aucun textbook trouvé.
+                  Aucun manuel trouvé.
                 </div>
               ) : (
                 filteredDocs.map((doc) => {
@@ -412,7 +464,7 @@ export default function NotebookWorkspace({
                   </div>
 
                   <h1 className="text-2xl font-bold font-sans text-slate-800 tracking-tight leading-tight">
-                    {documents.find(d => d.id === activeDocId)?.name || "Algorithmique et Structures de Données: Cours et Exercices"}
+                    {activeDocTitle}
                   </h1>
                   
                   <div className="text-[11px] font-mono text-slate-500 mt-1.5 flex items-center gap-2">
@@ -422,7 +474,7 @@ export default function NotebookWorkspace({
                   </div>
 
                   <p className="text-xs text-slate-650 leading-relaxed font-sans pt-4 mt-2 border-t border-slate-200">
-                    Ce support pédagogique détaille les concepts fondamentaux de l'algorithmique, incluant l'analyse de la complexité temporelle et spatiale, l'optimisation des structures de données linéaires et non linéaires, ainsi que la conception d'algorithmes robustes d'aide à la décision.
+                    {activeDocOverview}{activeDocOverview.length >= 400 ? "…" : ""}
                   </p>
 
                   {/* Actions footer representing screenshot */}
@@ -437,7 +489,7 @@ export default function NotebookWorkspace({
                           content: "Génération automatique d'une note d'assimilation sur " + (documents.find(d => d.id === activeDocId)?.name || "les chapitres")
                         };
                         setUserNotes(prev => [newNote, ...prev]);
-                        alert("Note synthèse consignée dans votre Studio.");
+                        showAlert("Note enregistrée", "Note synthèse consignée dans votre Studio.", "success");
                       }}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200 hover:border-slate-400 transition-all cursor-pointer shadow-3xs"
                     >
@@ -445,7 +497,7 @@ export default function NotebookWorkspace({
                     </button>
                     
                     <button 
-                      onClick={() => alert("Copié dans le presse-papier")}
+                      onClick={() => navigator.clipboard.writeText(activeDocOverview)}
                       className="text-slate-500 hover:text-slate-800 cursor-pointer" 
                       title="Copier"
                     >
@@ -466,30 +518,32 @@ export default function NotebookWorkspace({
                   </span>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                    <button 
-                      onClick={() => insertSuggestion("Explique la structure d'un algorithme de Tri Fusion (Merge Sort) et sa complexite.")}
-                      className="p-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-900 text-xs text-left rounded-xl cursor-pointer transition-all hover:translate-x-0.5"
-                    >
-                      "Fonctionnement du Tri Fusion."
-                    </button>
-                    <button 
-                      onClick={() => insertSuggestion("Comment evalue-t-on la complexite temporelle au pire des cas avec la notation Big-O ?")}
-                      className="p-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-900 text-xs text-left rounded-xl cursor-pointer transition-all hover:translate-x-0.5"
-                    >
-                      "Calcul de la complexite Big-O."
-                    </button>
-                    <button 
-                      onClick={() => insertSuggestion("Quelle est la difference en termes de performance entre un tableau et une liste chainee ?")}
-                      className="p-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-900 text-xs text-left rounded-xl cursor-pointer transition-all hover:translate-x-0.5"
-                    >
-                      "Tableaux vs Listes chainees."
-                    </button>
-                    <button 
-                      onClick={() => insertSuggestion("Quelles sont les applications pratiques d'une structure de donnees de type Pile (Stack) ?")}
-                      className="p-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-900 text-xs text-left rounded-xl cursor-pointer transition-all hover:translate-x-0.5"
-                    >
-                      "Utilisation de la structure Pile."
-                    </button>
+                    {chapterSuggestions.length > 0 ? (
+                      chapterSuggestions.map((chapter) => (
+                        <button
+                          key={chapter}
+                          onClick={() => insertSuggestion(`Explique les concepts clés du chapitre « ${chapter} ».`)}
+                          className="p-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-900 text-xs text-left rounded-xl cursor-pointer transition-all hover:translate-x-0.5"
+                        >
+                          « {chapter} »
+                        </button>
+                      ))
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => insertSuggestion("Quels sont les concepts fondamentaux de ce document ?")}
+                          className="p-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-900 text-xs text-left rounded-xl cursor-pointer transition-all hover:translate-x-0.5"
+                        >
+                          « Concepts fondamentaux du document »
+                        </button>
+                        <button
+                          onClick={() => insertSuggestion("Résume les points essentiels de ce support pédagogique.")}
+                          className="p-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-900 text-xs text-left rounded-xl cursor-pointer transition-all hover:translate-x-0.5"
+                        >
+                          « Résumé des points essentiels »
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -556,7 +610,7 @@ export default function NotebookWorkspace({
                   <div className="flex justify-start">
                     <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 shadow-sm flex items-center gap-2 animate-pulse">
                       <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />
-                      <span className="text-xs text-slate-500 font-mono italic">CampusMind synthétise les textbooks...</span>
+                      <span className="text-xs text-slate-500 font-mono italic">CampusMind synthétise les manuels...</span>
                     </div>
                   </div>
                 )}
@@ -605,78 +659,45 @@ export default function NotebookWorkspace({
 
           <div className="flex-1 overflow-y-auto p-4 space-y-5 min-h-0 bg-slate-50">
             
-            {/* Studio dynamic tools grid */}
+            <WorkflowProgressPanel
+              steps={workflow.steps}
+              isRunning={workflow.isRunning}
+              isComplete={workflow.isComplete}
+              progress={workflow.progress}
+              outputs={workflow.outputs}
+              onStart={workflow.start}
+              onOpenDetails={() => setActiveStudioModal("workflow")}
+              onPlayPodcast={openPodcastFromWorkflow}
+              onPlayAudiobook={openAudiobookFromWorkflow}
+              hasDocuments={documents.length > 0}
+            />
+
             <div className="space-y-2.5">
               <h3 className="text-[10px] font-mono text-slate-500 uppercase font-bold tracking-widest px-1">
-                Gérer mes supports
+                Outils du Studio
               </h3>
-              
-              <div className="grid grid-cols-2 gap-2">
-                
-                {/* Résumé audio */}
-                <button 
-                  onClick={() => setActiveStudioModal("podcast")}
-                  className="p-3 bg-white hover:bg-slate-100/60 border border-slate-200 hover:border-slate-300 rounded-xl text-left transition-all cursor-pointer group shadow-3xs"
-                >
-                  <Radio className="w-5 h-5 text-indigo-500 group-hover:scale-105 transition-transform mb-2.5" />
-                  <span className="text-xs font-bold text-slate-800 block">Résumé Audio</span>
-                  <span className="text-[9px] text-slate-500 truncate block mt-0.5">Dual Debate Podcast</span>
-                </button>
 
-                {/* Présentation / Narration verbatim */}
-                <button 
-                  onClick={() => setActiveStudioModal("audiobook")}
-                  className="p-3 bg-white hover:bg-slate-100/60 border border-slate-200 hover:border-slate-300 rounded-xl text-left transition-all cursor-pointer group shadow-3xs"
-                >
-                  <BookOpen className="w-5 h-5 text-emerald-500 group-hover:scale-105 transition-transform mb-2.5" />
-                  <span className="text-xs font-bold text-slate-800 block">Présentation</span>
-                  <span className="text-[9px] text-slate-500 truncate block mt-0.5">Libre audio lecture</span>
-                </button>
-
-                {/* Fiches d'apprentissage */}
-                <button 
-                  onClick={() => setActiveStudioModal("flashcards")}
-                  className="p-3 bg-white hover:bg-slate-100/60 border border-slate-200 hover:border-slate-300 rounded-xl text-left transition-all cursor-pointer group shadow-3xs"
-                >
-                  <FileText className="w-5 h-5 text-amber-500 group-hover:scale-105 transition-transform mb-2.5" />
-                  <span className="text-xs font-bold text-slate-880 block">Fiches Mémo</span>
-                  <span className="text-[9px] text-slate-500 truncate block mt-0.5">Glossaire & mnémos</span>
-                </button>
-
-                {/* Quiz */}
-                <button 
-                  onClick={() => setActiveStudioModal("quizzes")}
-                  className="p-3 bg-white hover:bg-slate-100/60 border border-slate-200 hover:border-slate-300 rounded-xl text-left transition-all cursor-pointer group shadow-3xs"
-                >
-                  <Award className="w-5 h-5 text-pink-500 group-hover:scale-105 transition-transform mb-2.5" />
-                  <span className="text-xs font-bold text-slate-880 block">Quiz Pratique</span>
-                  <span className="text-[9px] text-slate-500 truncate block mt-0.5">Évaluation adaptive</span>
-                </button>
-
-                {/* Examen Simulator */}
-                <button 
-                  onClick={() => setActiveStudioModal("mockexam")}
-                  className="p-3 bg-white hover:bg-slate-100/60 border border-slate-200 hover:border-slate-300 rounded-xl text-left transition-all cursor-pointer group col-span-2 flex items-center gap-3.5 shadow-3xs"
-                >
-                  <GraduationCap className="w-6 h-6 text-purple-500 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <span className="text-xs font-bold text-slate-880 block">Examen Blanc National</span>
-                    <span className="text-[9px] text-slate-500 block truncate">Rapport prédictif & timing d'études</span>
-                  </div>
-                </button>
-
-                {/* Workflow pipeline builder */}
-                <button 
-                  onClick={() => setActiveStudioModal("workflow")}
-                  className="p-3 bg-white hover:bg-slate-100/60 border border-slate-200 hover:border-slate-300 rounded-xl text-left transition-all cursor-pointer group col-span-2 flex items-center gap-3.5 shadow-3xs"
-                >
-                  <Sliders className="w-6 h-6 text-indigo-500 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <span className="text-xs font-bold text-slate-880 block">Pipeline de données</span>
-                    <span className="text-[9px] text-slate-500 block truncate">Orchestrer l'ensemble en un clic</span>
-                  </div>
-                </button>
-
+              <div className="space-y-2">
+                {[
+                  { id: "training" as const, icon: GraduationCap, color: "text-primary", title: "Entraînement", desc: "Diagnostic, parcours, quiz adaptatifs et renforcement" },
+                  { id: "podcast" as const, icon: Radio, color: "text-indigo-500", title: "Audio Summary", desc: "Podcast à deux voix sur vos cours" },
+                  { id: "audiobook" as const, icon: BookOpen, color: "text-emerald-600", title: "Audiobook", desc: "Lecture fidèle de vos documents" },
+                  { id: "exam" as const, icon: Award, color: "text-tertiary", title: "Exam Simulator", desc: "Examen, correction, insights et recommandations" },
+                  { id: "workflow" as const, icon: Sliders, color: "text-secondary", title: "Workflow Builder", desc: "Pipeline complet en un clic" },
+                ].map((tool) => (
+                  <button
+                    key={tool.id}
+                    onClick={() => setActiveStudioModal(tool.id)}
+                    className="w-full p-3 bg-white hover:bg-primary-container/30 border border-slate-200 hover:border-primary/30 rounded-xl text-left transition-all cursor-pointer group shadow-3xs flex items-center gap-3"
+                  >
+                    <tool.icon className={`w-5 h-5 ${tool.color} shrink-0 group-hover:scale-105 transition-transform`} />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs font-bold text-slate-800 block">{tool.title}</span>
+                      <span className="text-[9px] text-slate-500 block truncate mt-0.5">{tool.desc}</span>
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -702,7 +723,7 @@ export default function NotebookWorkspace({
                       <button 
                         onClick={(e) => handleDeleteNote(note.id, e)}
                         className="text-slate-400 hover:text-red-650 p-0.5 opacity-0 group-hover:opacity-100 transition-all"
-                        title="Delete note"
+                        title="Supprimer la note"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -739,25 +760,18 @@ export default function NotebookWorkspace({
       {/* MODAL ENGINE FOR EXPANDED WORKSPACE TOOLS (AUDIO, EXAMS...) */}
       {/* ========================================================= */}
       {activeStudioModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white text-slate-850 w-full max-w-5xl h-[88vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden relative border border-slate-100 animate-scaleUp">
+        <div className="fixed inset-0 z-50 bg-on-surface/20 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white text-on-surface w-full max-w-5xl h-[88vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden relative border border-outline-variant animate-scaleUp">
             
-            {/* Dark modal header to fit visual standard */}
-            <div className="px-6 py-4.5 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-white md:px-8 shrink-0">
+            <div className="px-6 py-4.5 bg-primary-container/40 border-b border-outline-variant flex items-center justify-between text-on-surface md:px-8 shrink-0">
               <div className="flex items-center gap-3">
-                <Sparkles className="w-5 h-5 text-indigo-400 animate-pulse" />
+                <Sparkles className="w-5 h-5 text-primary animate-pulse" />
                 <div>
                   <h3 className="text-sm font-bold tracking-tight">
-                    {activeStudioModal === "podcast" && "Générateur Audio Podcast & Échanges"}
-                    {activeStudioModal === "audiobook" && "Lecture en Verbatim d'Audiobooks"}
-                    {activeStudioModal === "flashcards" && "Fiches Mnémotechniques & Sessions Assimilation"}
-                    {activeStudioModal === "quizzes" && "Quiz d'Évaluation de Connaissances"}
-                    {activeStudioModal === "mockexam" && "Simulateur d'Examens Blancs Nationaux"}
-                    {activeStudioModal === "workflow" && "Pipeline d'Assemblages de Supports Générés"}
-                    {activeStudioModal === "ingest" && "OCR de Transcription & Indexation de Livres"}
+                    {activeStudioModal && STUDIO_MODAL_META[activeStudioModal].title}
                   </h3>
-                  <p className="text-[10px] font-mono text-slate-400 uppercase tracking-widest mt-0.5">
-                    Mode d'exécution et d'intégration direct
+                  <p className="text-[10px] font-mono text-on-surface-variant tracking-widest mt-0.5">
+                    {activeStudioModal && STUDIO_MODAL_META[activeStudioModal].subtitle}
                   </p>
                 </div>
               </div>
@@ -765,18 +779,17 @@ export default function NotebookWorkspace({
               <button 
                 onClick={() => {
                   setActiveStudioModal(null);
-                  // Kill speech synthesis if modal is closed
                   window.speechSynthesis?.cancel();
                 }}
-                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center hover:text-white cursor-pointer"
-                title="Clore le module"
+                className="w-8 h-8 rounded-full bg-surface-container-high hover:bg-surface-container text-on-surface-variant flex items-center justify-center hover:text-on-surface cursor-pointer"
+                title="Fermer"
               >
                 &times;
               </button>
             </div>
 
             {/* Inner responsive panel content */}
-            <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-slate-50/50">
+            <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-surface">
               
               {activeStudioModal === "ingest" && (
                 <IngestionHub 
@@ -790,11 +803,25 @@ export default function NotebookWorkspace({
                 />
               )}
 
-              {(activeStudioModal === "podcast" || activeStudioModal === "audiobook") && (
-                <MediaStudio documents={documents} />
+              {activeStudioModal === "podcast" && (
+                <MediaStudio
+                  documents={documents}
+                  initialMode="podcast"
+                  lockedMode
+                  initialPodcastScript={studioPodcastScript}
+                />
               )}
 
-              {(activeStudioModal === "flashcards" || activeStudioModal === "quizzes" || activeStudioModal === "learningpath") && (
+              {activeStudioModal === "audiobook" && (
+                <MediaStudio
+                  documents={documents}
+                  initialMode="audiobook"
+                  lockedMode
+                  initialAudiobookChapters={studioAudiobookChapters}
+                />
+              )}
+
+              {activeStudioModal === "training" && (
                 <AdaptiveTraining 
                   documents={documents}
                   learningPath={learningPath}
@@ -804,7 +831,7 @@ export default function NotebookWorkspace({
                 />
               )}
 
-              {activeStudioModal === "mockexam" && (
+              {activeStudioModal === "exam" && (
                 <ExamSimulator 
                   documents={documents}
                   onExamSaved={(newDb) => {
@@ -815,12 +842,15 @@ export default function NotebookWorkspace({
               )}
 
               {activeStudioModal === "workflow" && (
-                <WorkflowBuilder 
-                  documents={documents}
-                  onWorkflowComplete={(newDb) => {
-                    handleWorkflowComplete(newDb);
-                    setActiveStudioModal(null);
-                  }}
+                <WorkflowBuilder
+                  steps={workflow.steps}
+                  isRunning={workflow.isRunning}
+                  isComplete={workflow.isComplete}
+                  outputs={workflow.outputs}
+                  onStart={workflow.start}
+                  onPlayPodcast={openPodcastFromWorkflow}
+                  onPlayAudiobook={openAudiobookFromWorkflow}
+                  hasDocuments={documents.length > 0}
                 />
               )}
 
@@ -833,7 +863,7 @@ export default function NotebookWorkspace({
       {/* WRITE NEW NOTE MODAL POPUP */}
       {/* ========================================================= */}
       {showAddNotePrompt && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-3xs flex items-center justify-center p-4 animate-fadeIn">
+        <div className="fixed inset-0 z-50 bg-on-surface/15 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
           <form 
             onSubmit={handleCreateNote}
             className="bg-white border border-slate-200 text-slate-800 w-full max-w-md rounded-2xl p-6 space-y-4 shadow-2xl animate-scaleUp"
@@ -892,7 +922,7 @@ export default function NotebookWorkspace({
       {/* VIEW NOTE DETAIL MODAL POPUP */}
       {/* ========================================================= */}
       {viewNoteDetail && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-3xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-on-surface/15 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 text-slate-850 w-full max-w-lg rounded-2xl p-6 space-y-4 shadow-2xl animate-scaleUp">
             <div className="flex justify-between items-start pb-3 border-b border-slate-200">
               <div>
