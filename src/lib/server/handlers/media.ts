@@ -6,7 +6,7 @@ import { normalizeGeminiAudio } from "../audio";
 import { LANG_FR } from "../lang";
 import { errorResponse, jsonResponse } from "../response";
 
-const TTS_MODEL = "gemini-2.5-pro-preview-tts";
+const TTS_MODEL = "gemini-2.5-flash-preview-tts";
 
 const FRENCH_DIRECTOR_NOTE = `# Profil audio
 Speaker 1 : Professeur expert, voix posée et pédagogique.

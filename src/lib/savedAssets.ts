@@ -63,39 +63,127 @@ function toSavedAsset(id: string, data: Record<string, unknown>): SavedAsset {
   };
 }
 
+function getLocalAssets(courseId: string): SavedAsset[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`campusmind-assets-${courseId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return parsed.map((item: any) => ({
+        ...item,
+        createdAt: new Date(item.createdAt),
+      }));
+    }
+  } catch (e) {
+    console.error("Failed to read local assets:", e);
+  }
+  return [];
+}
+
+function saveLocalAssets(courseId: string, assets: SavedAsset[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(`campusmind-assets-${courseId}`, JSON.stringify(assets));
+  } catch (e) {
+    console.error("Failed to write local assets:", e);
+  }
+}
+
 export function subscribeSavedAssets(
   courseId: string,
   onChange: (assets: SavedAsset[]) => void,
   onError?: (error: Error) => void
 ): () => void {
-  const q = query(assetsCollection(courseId), orderBy("createdAt", "desc"));
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const assets = snapshot.docs.map((d) => toSavedAsset(d.id, d.data()));
-      onChange(assets);
-    },
-    (err) => onError?.(err)
-  );
+  let unsubscribed = false;
+  let unsubscribeFirestore: (() => void) | null = null;
+
+  const handleLocalUpdate = () => {
+    if (unsubscribed) return;
+    const localItems = getLocalAssets(courseId);
+    onChange(localItems);
+  };
+
+  if (typeof window !== "undefined") {
+    window.addEventListener(`campusmind-assets-updated-${courseId}`, handleLocalUpdate);
+  }
+
+  try {
+    const q = query(assetsCollection(courseId), orderBy("createdAt", "desc"));
+    unsubscribeFirestore = onSnapshot(
+      q,
+      (snapshot) => {
+        if (unsubscribed) return;
+        const assets = snapshot.docs.map((d) => toSavedAsset(d.id, d.data()));
+        saveLocalAssets(courseId, assets);
+        onChange(assets);
+      },
+      (err) => {
+        console.warn("Firestore subscription failed, falling back to localStorage:", err);
+        handleLocalUpdate();
+      }
+    );
+  } catch (err) {
+    console.warn("Firestore query creation failed, falling back to localStorage:", err);
+    handleLocalUpdate();
+  }
+
+  return () => {
+    unsubscribed = true;
+    if (unsubscribeFirestore) unsubscribeFirestore();
+    if (typeof window !== "undefined") {
+      window.removeEventListener(`campusmind-assets-updated-${courseId}`, handleLocalUpdate);
+    }
+  };
 }
 
 export async function saveAsset(courseId: string, input: SavedAssetInput): Promise<string> {
   const id = `${input.type}-${Date.now()}`;
-  await setDoc(doc(assetsCollection(courseId), id), {
-    type: input.type,
-    title: input.title,
-    content: input.content,
-    audioBase64: input.audioBase64 || null,
-    audioMimeType: input.audioMimeType || null,
-    sourceCount: input.sourceCount ?? 0,
-    score: input.score ?? null,
-    createdAt: serverTimestamp(),
-  });
-  return id;
+  try {
+    await setDoc(doc(assetsCollection(courseId), id), {
+      type: input.type,
+      title: input.title,
+      content: input.content,
+      audioBase64: input.audioBase64 || null,
+      audioMimeType: input.audioMimeType || null,
+      sourceCount: input.sourceCount ?? 0,
+      score: input.score ?? null,
+      createdAt: serverTimestamp(),
+    });
+    return id;
+  } catch (err) {
+    console.warn("Firestore saveAsset failed, saving to localStorage instead:", err);
+    const localAssets = getLocalAssets(courseId);
+    const newAsset: SavedAsset = {
+      id,
+      type: input.type,
+      title: input.title,
+      content: input.content,
+      audioBase64: input.audioBase64,
+      audioMimeType: input.audioMimeType,
+      sourceCount: input.sourceCount ?? 0,
+      score: input.score,
+      createdAt: new Date(),
+    };
+    saveLocalAssets(courseId, [newAsset, ...localAssets]);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(`campusmind-assets-updated-${courseId}`));
+    }
+    return id;
+  }
 }
 
 export async function deleteAsset(courseId: string, assetId: string): Promise<void> {
-  await deleteDoc(doc(assetsCollection(courseId), assetId));
+  try {
+    await deleteDoc(doc(assetsCollection(courseId), assetId));
+  } catch (err) {
+    console.warn("Firestore deleteAsset failed, deleting from localStorage instead:", err);
+    const localAssets = getLocalAssets(courseId);
+    const updated = localAssets.filter((a) => a.id !== assetId);
+    saveLocalAssets(courseId, updated);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(`campusmind-assets-updated-${courseId}`));
+    }
+  }
 }
 
 export function formatTimeAgo(date: Date): string {

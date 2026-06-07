@@ -21,6 +21,19 @@ import { ExamSession, ExamGrading } from "../types";
 import { apiFetch, parseApiResponse } from "../lib/api";
 import { evaluateExam, generateExam } from "../lib/campusAi";
 import { useModal } from "../context/ModalContext";
+function getOptionText(opt: any): string {
+  if (typeof opt === "object" && opt !== null) {
+    return String(Object.values(opt)[0] || "");
+  }
+  return String(opt || "");
+}
+
+function getOptionKey(opt: any, index: number): string {
+  if (typeof opt === "object" && opt !== null) {
+    return `${Object.keys(opt)[0]}-${index}`;
+  }
+  return `${opt}-${index}`;
+}
 
 interface ExamSimulatorProps {
   documents: any[];
@@ -339,19 +352,20 @@ export default function ExamSimulator({ documents, onExamSaved, onAssetSaved }: 
                 {/* Question Option Selection */}
                 {activeExam.questions[currentQuestionIdx].options ? (
                   <div className="grid grid-cols-1 gap-2.5 pt-3">
-                    {activeExam.questions[currentQuestionIdx].options!.map((opt) => {
-                      const isSelected = studentAnswers[activeExam.questions[currentQuestionIdx].id] === opt;
+                    {activeExam.questions[currentQuestionIdx].options!.map((opt, optIdx) => {
+                      const optText = getOptionText(opt);
+                      const isSelected = studentAnswers[activeExam.questions[currentQuestionIdx].id] === optText;
                       return (
                         <button
-                          key={opt}
-                          onClick={() => handleSelectAnswer(activeExam.questions[currentQuestionIdx].id, opt)}
+                          key={getOptionKey(opt, optIdx)}
+                          onClick={() => handleSelectAnswer(activeExam.questions[currentQuestionIdx].id, optText)}
                           className={`w-full text-left px-4 py-3 text-xs rounded-xl font-medium border cursor-pointer select-none transition-all flex items-center justify-between ${
                             isSelected
                               ? "bg-indigo-600 text-white border-transparent shadow-xs"
                               : "hover:bg-slate-50 bg-slate-50/50 border-slate-200 text-slate-700"
                           }`}
                         >
-                          <span>{opt}</span>
+                          <span>{optText}</span>
                           {isSelected && <CheckCircle2 className="w-4 h-4 text-white" />}
                         </button>
                       );
@@ -546,7 +560,7 @@ export default function ExamSimulator({ documents, onExamSaved, onAssetSaved }: 
                         {!corr.isCorrect && (
                           <div className="pt-2 mt-2 border-t border-slate-200/40">
                             <span className="font-bold text-slate-400 block pb-0.5 text-[10px]">Solution attendue :</span>
-                            <span className="text-slate-800">{corr.correctAnswer}</span>
+                            <span className="text-slate-800">{getOptionText(corr.correctAnswer)}</span>
                           </div>
                         )}
                       </div>

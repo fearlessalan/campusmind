@@ -29,7 +29,7 @@ function getFirebaseConfig(): CampusFirebaseConfig {
   }
 
   throw new Error(
-    "Configuration Firebase manquante. Définissez NEXT_PUBLIC_FIREBASE_* dans .env.local."
+    "Configuration Firebase manquante. Définissez NEXT_PUBLIC_FIREBASE_* dans .env."
   );
 }
 

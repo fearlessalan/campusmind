@@ -36,6 +36,20 @@ import {
 } from "../lib/campusAi";
 import { useModal } from "../context/ModalContext";
 
+function getOptionText(opt: any): string {
+  if (typeof opt === "object" && opt !== null) {
+    return String(Object.values(opt)[0] || "");
+  }
+  return String(opt || "");
+}
+
+function getOptionKey(opt: any, index: number): string {
+  if (typeof opt === "object" && opt !== null) {
+    return `${Object.keys(opt)[0]}-${index}`;
+  }
+  return `${opt}-${index}`;
+}
+
 interface AdaptiveTrainingProps {
   documents: any[];
   learningPath: LearningModule[];
@@ -214,7 +228,9 @@ export default function AdaptiveTraining({
     if (!practiceQuiz) return;
     let correctCount = 0;
     practiceQuiz.forEach((q) => {
-      if (practiceAnswers[q.id]?.trim().toLowerCase() === q.correctAnswer.trim().toLowerCase()) {
+      const studentAns = (practiceAnswers[q.id] || "").trim().toLowerCase();
+      const correctAns = getOptionText(q.correctAnswer).trim().toLowerCase();
+      if (studentAns === correctAns) {
         correctCount += 1;
       }
     });
@@ -331,21 +347,25 @@ export default function AdaptiveTraining({
                   {/* Options rendering */}
                   {q.options && q.options.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
-                      {q.options.map((opt) => (
-                        <button
-                          key={opt}
-                          type="button"
-                          onClick={() => handleSelectOption(q.id, opt)}
-                          className={`px-4 py-3 rounded-xl border text-left transition-all text-xs font-medium cursor-pointer flex justify-between ${
-                            studentAnswers[q.id] === opt
-                              ? "bg-indigo-600 text-white border-transparent"
-                              : "hover:bg-slate-100/50 bg-white text-slate-700 border-slate-200"
-                          }`}
-                        >
-                          <span>{opt}</span>
-                          {studentAnswers[q.id] === opt && <CheckCircle2 className="w-4 h-4 text-white" />}
-                        </button>
-                      ))}
+                      {q.options.map((opt, optIdx) => {
+                        const optText = getOptionText(opt);
+                        const isSelected = studentAnswers[q.id] === optText;
+                        return (
+                          <button
+                            key={getOptionKey(opt, optIdx)}
+                            type="button"
+                            onClick={() => handleSelectOption(q.id, optText)}
+                            className={`px-4 py-3 rounded-xl border text-left transition-all text-xs font-medium cursor-pointer flex justify-between ${
+                              isSelected
+                                ? "bg-indigo-600 text-white border-transparent"
+                                : "hover:bg-slate-100/50 bg-white text-slate-700 border-slate-200"
+                            }`}
+                          >
+                            <span>{optText}</span>
+                            {isSelected && <CheckCircle2 className="w-4 h-4 text-white" />}
+                          </button>
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="pt-1.5">
@@ -479,16 +499,17 @@ export default function AdaptiveTraining({
                     <p className="font-semibold text-on-surface text-[11px] leading-relaxed">{reinforcementData.targetedQuickQuiz.question}</p>
                     
                     <div className="space-y-2">
-                      {reinforcementData.targetedQuickQuiz.options?.map((opt: string) => {
-                        const correctVal = reinforcementData.targetedQuickQuiz?.correctAnswer;
-                        const isSelected = reinforcementAnswer === opt;
-                        const isCorrectOpt = opt === correctVal;
+                      {reinforcementData.targetedQuickQuiz.options?.map((opt: any, optIdx: number) => {
+                        const optText = getOptionText(opt);
+                        const correctVal = getOptionText(reinforcementData.targetedQuickQuiz?.correctAnswer);
+                        const isSelected = reinforcementAnswer === optText;
+                        const isCorrectOpt = optText === correctVal;
 
                         return (
                           <button
-                            key={opt}
+                            key={getOptionKey(opt, optIdx)}
                             disabled={reinforcementSolved}
-                            onClick={() => handleReinforceSubmit(opt)}
+                            onClick={() => handleReinforceSubmit(optText)}
                             className={`w-full text-left px-3 py-2 text-[10px] font-medium rounded-lg border transition-all cursor-pointer flex justify-between items-center ${
                               reinforcementSolved
                                 ? isCorrectOpt
@@ -499,7 +520,7 @@ export default function AdaptiveTraining({
                                 : "hover:bg-surface-container bg-white text-on-surface border-outline-variant"
                             }`}
                           >
-                            <span>{opt}</span>
+                            <span>{optText}</span>
                             {reinforcementSolved && isCorrectOpt && <CheckCircle2 className="w-3 h-3 text-emerald-400" />}
                           </button>
                         );
@@ -647,10 +668,10 @@ export default function AdaptiveTraining({
                             </span>
                             {checkedPractice && (
                               <span className={`font-semibold ${
-                                practiceAnswers[pq.id]?.trim().toLowerCase() === pq.correctAnswer.trim().toLowerCase()
+                                (practiceAnswers[pq.id] || "").trim().toLowerCase() === getOptionText(pq.correctAnswer).trim().toLowerCase()
                                   ? "text-emerald-600" : "text-rose-600"
                               }`}>
-                                {practiceAnswers[pq.id]?.trim().toLowerCase() === pq.correctAnswer.trim().toLowerCase() ? "Correct" : "Incorrect"}
+                                {(practiceAnswers[pq.id] || "").trim().toLowerCase() === getOptionText(pq.correctAnswer).trim().toLowerCase() ? "Correct" : "Incorrect"}
                               </span>
                             )}
                           </div>
@@ -659,20 +680,20 @@ export default function AdaptiveTraining({
 
                           {pq.options && pq.options.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                              {pq.options.map((option) => (
+                              {pq.options.map((option, optIdx) => (
                                 <button
-                                  key={option}
+                                  key={getOptionKey(option, optIdx)}
                                   type="button"
                                   disabled={checkedPractice}
-                                  onClick={() => setPracticeAnswers(prev => ({ ...prev, [pq.id]: option }))}
+                                  onClick={() => setPracticeAnswers(prev => ({ ...prev, [pq.id]: getOptionText(option) }))}
                                   className={`px-3 py-2 text-left rounded-lg text-[11px] font-medium border transition-all cursor-pointer flex justify-between items-center ${
-                                    practiceAnswers[pq.id] === option
+                                    practiceAnswers[pq.id] === getOptionText(option)
                                       ? "bg-indigo-600 border-transparent text-white"
                                       : "hover:bg-slate-100 bg-white border-slate-200 text-slate-700"
                                   }`}
                                 >
-                                  <span>{option}</span>
-                                  {practiceAnswers[pq.id] === option && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                                  <span>{getOptionText(option)}</span>
+                                  {practiceAnswers[pq.id] === getOptionText(option) && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
                                 </button>
                               ))}
                             </div>
@@ -689,7 +710,7 @@ export default function AdaptiveTraining({
 
                           {checkedPractice && (
                             <div className="pt-2 border-t border-slate-150/40 text-[10px] text-slate-400">
-                              <span className="font-semibold text-slate-700 block pb-0.5">Réponse correcte : {pq.correctAnswer}</span>
+                              <span className="font-semibold text-slate-700 block pb-0.5">Réponse correcte : {getOptionText(pq.correctAnswer)}</span>
                               <span className="block">{pq.explanation}</span>
                             </div>
                           )}

@@ -154,11 +154,13 @@
               }
             ],
             "performance": {
-              "progress": 0,
-              "retention": 2,
-              "exam_readiness": 3,
+              "progress": 70,
+              "retention": 60,
+              "exam_readiness": 70,
               "scoreHistory": [
-                3
+                3,
+                77,
+                70
               ]
             },
             "learningPath": [],
@@ -318,11 +320,13 @@
           }
         ],
         "performance": {
-          "progress": 0,
-          "retention": 2,
-          "exam_readiness": 3,
+          "progress": 70,
+          "retention": 60,
+          "exam_readiness": 70,
           "scoreHistory": [
-            3
+            3,
+            77,
+            70
           ]
         },
         "learningPath": [],
